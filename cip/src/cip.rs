@@ -1,8 +1,11 @@
-use alloc::{boxed::Box, vec::{Vec}};
+use alloc::{boxed::Box, vec::Vec};
 use async_trait::async_trait;
 use nom::{bytes::complete::take, sequence::tuple, InputTake};
 
-use crate::{common::Serializable, objects::{connection_manager::UnconnectedSendRequest, message_router::MessageRouter}};
+use crate::{
+    common::Serializable,
+    objects::{connection_manager::UnconnectedSendRequest, message_router::MessageRouter},
+};
 
 pub trait EpathSegments: Serializable {
     fn get_type(&self) -> u8;
@@ -17,11 +20,19 @@ pub struct LogicalSegment {
 
 impl LogicalSegment {
     pub fn new() -> Self {
-        Self { logical_format: 0, logical_type: 0, value: 0 }
+        Self {
+            logical_format: 0,
+            logical_type: 0,
+            value: 0,
+        }
     }
 
     pub fn init(logical_type: u8, value: u32) -> Self {
-        let mut obj = Self { logical_format: 0, logical_type: 0, value: 0 };
+        let mut obj = Self {
+            logical_format: 0,
+            logical_type: 0,
+            value: 0,
+        };
         obj.set_segment(logical_type, value);
         return obj;
     }
@@ -50,7 +61,7 @@ impl EpathSegments for LogicalSegment {
         result = result | 0b00100000;
         result = result | (self.logical_type << 2);
         result = result | self.logical_format;
-        
+
         return result;
     }
 
@@ -60,7 +71,7 @@ impl EpathSegments for LogicalSegment {
             0b00 => result.push(self.value as u8),
             0b01 => result.extend(u16::to_le_bytes(self.value as u16)),
             0b10 => result.extend(u32::to_le_bytes(self.value as u32)),
-            _ => panic!("Unknown logical format!")
+            _ => panic!("Unknown logical format!"),
         }
 
         return result;
@@ -68,7 +79,10 @@ impl EpathSegments for LogicalSegment {
 }
 
 impl Serializable for LogicalSegment {
-    fn deserialize(input: &[u8]) -> nom::IResult<&[u8], Self> where Self: Sized {
+    fn deserialize(input: &[u8]) -> nom::IResult<&[u8], Self>
+    where
+        Self: Sized,
+    {
         let encoding1 = input.take_split(1);
         let encoding = encoding1.0[0];
         let logical_segment_type = (encoding & 0b00011100) >> 2;
@@ -81,7 +95,14 @@ impl Serializable for LogicalSegment {
             actual_value = (actual_value << 8) + u32::from(num.clone());
         }
 
-        return Ok((value.1, LogicalSegment { logical_type: logical_segment_type, logical_format: logical_format, value: actual_value}));
+        return Ok((
+            value.1,
+            LogicalSegment {
+                logical_type: logical_segment_type,
+                logical_format: logical_format,
+                value: actual_value,
+            },
+        ));
     }
 
     fn serialize(&self) -> Vec<u8> {
@@ -100,7 +121,7 @@ impl Serializable for LogicalSegment {
 pub struct PortSegment {
     pub extended_link_address: bool,
     pub port_identifier: u8,
-    pub link_address: Vec<u8>
+    pub link_address: Vec<u8>,
 }
 
 impl EpathSegments for PortSegment {
@@ -125,14 +146,24 @@ impl EpathSegments for PortSegment {
 }
 
 impl Serializable for PortSegment {
-    fn deserialize(input: &[u8]) -> nom::IResult<&[u8], Self> where Self: Sized {
+    fn deserialize(input: &[u8]) -> nom::IResult<&[u8], Self>
+    where
+        Self: Sized,
+    {
         let encoding1 = input.take_split(1);
         let encoding = encoding1.0[0];
         let is_extended = (encoding & 0b00010000) != 0;
         let value = encoding & 0b1111;
         let (reamining, link_address) = input.take_split(1);
 
-        return Ok((reamining, PortSegment { extended_link_address: is_extended, port_identifier: value, link_address: alloc::vec![link_address[0]] }));
+        return Ok((
+            reamining,
+            PortSegment {
+                extended_link_address: is_extended,
+                port_identifier: value,
+                link_address: alloc::vec![link_address[0]],
+            },
+        ));
     }
 
     fn serialize(&self) -> Vec<u8> {
@@ -146,7 +177,11 @@ impl Serializable for PortSegment {
 
 impl PortSegment {
     pub fn new() -> Self {
-        Self { port_identifier: 1, extended_link_address: false, link_address: Vec::new() }
+        Self {
+            port_identifier: 1,
+            extended_link_address: false,
+            link_address: Vec::new(),
+        }
     }
 
     pub fn set_segment(&mut self, port_identifier: u8) {
@@ -163,12 +198,14 @@ impl PortSegment {
 }
 
 pub struct EPath {
-    pub attributes: Vec<Box<dyn EpathSegments>>
+    pub attributes: Vec<Box<dyn EpathSegments>>,
 }
 
 impl EPath {
     pub fn new() -> Self {
-        Self { attributes: Vec::new() }
+        Self {
+            attributes: Vec::new(),
+        }
     }
 }
 
@@ -188,12 +225,12 @@ pub enum CipService {
     ApplyAttributes = 0x0D,
     GetAttributeSingle = 0x0E,
     SetAttributeSingle = 0x10,
-    Save = 0x16
+    Save = 0x16,
 }
 
 #[repr(u8)]
 #[allow(dead_code)]
-pub enum  LogicalType {
+pub enum LogicalType {
     ClassId = 0b000,
     InstanceId = 0b001,
     MemberId = 0b010,
@@ -201,12 +238,12 @@ pub enum  LogicalType {
     AttributeId = 0b100,
     Special = 0b101,
     ServiceId = 0b110,
-    ExdendedLogical = 0b111
+    ExdendedLogical = 0b111,
 }
 
 #[repr(u8)]
 #[allow(dead_code)]
-pub enum  LogicalFormat {
+pub enum LogicalFormat {
     EightBit = 0b00,
     SixteenBit = 0b01,
     ThirtyTwoBit = 0b10,
@@ -265,11 +302,14 @@ pub enum CipDataType {
 pub struct MessageRouterRequest {
     pub service: u8,
     pub epath: EPath,
-    pub data: Vec<u8>
+    pub data: Vec<u8>,
 }
 
 impl Serializable for MessageRouterRequest {
-    fn deserialize(_input: &[u8]) -> nom::IResult<&[u8], Self> where Self: Sized {
+    fn deserialize(_input: &[u8]) -> nom::IResult<&[u8], Self>
+    where
+        Self: Sized,
+    {
         todo!()
     }
 
@@ -278,7 +318,7 @@ impl Serializable for MessageRouterRequest {
         let mut segments = Vec::new();
 
         result.push(self.service);
-        
+
         for segement in &self.epath.attributes {
             segments.extend(segement.as_ref().serialize());
         }
@@ -303,18 +343,32 @@ pub struct MessageRouterResponse {
     pub general_status: u8,
     pub size_of_additional_status: u8,
     pub additional_status: Vec<u16>,
-    pub data: Vec<u8>
+    pub data: Vec<u8>,
 }
 
 impl Serializable for MessageRouterResponse {
-    fn deserialize(input: &[u8]) -> nom::IResult<&[u8], Self> where Self: Sized {
-        let (input, (raw_service, raw_reserved, raw_general_status, raw_size_of_additional_status)) = tuple((take(1u8),take(1u8),take(1u8), take(1u8)))(input)?;
+    fn deserialize(input: &[u8]) -> nom::IResult<&[u8], Self>
+    where
+        Self: Sized,
+    {
+        let (input, (raw_service, raw_reserved, raw_general_status, raw_size_of_additional_status)) =
+            tuple((take(1u8), take(1u8), take(1u8), take(1u8)))(input)?;
         let service = raw_service[0].into();
         let reserved = raw_reserved[0].into();
         let general_status = raw_general_status[0].into();
         let size_of_additional_status = raw_size_of_additional_status[0].into();
 
-        return Ok((&input, MessageRouterResponse { service, reserved, general_status, size_of_additional_status, additional_status: Vec::new(), data: input.to_vec()}));
+        return Ok((
+            &input,
+            MessageRouterResponse {
+                service,
+                reserved,
+                general_status,
+                size_of_additional_status,
+                additional_status: Vec::new(),
+                data: input.to_vec(),
+            },
+        ));
     }
 
     fn serialize(&self) -> Vec<u8> {
@@ -328,7 +382,7 @@ pub struct DataResult {
 }
 
 #[async_trait]
-pub trait Client {
+pub trait Client: Send {
     async fn begin_session(&mut self);
     async fn send_unconnected(&mut self, packet: Vec<u8>);
     async fn send_connected(&mut self, packet: Vec<u8>);
@@ -338,12 +392,14 @@ pub trait Client {
 }
 
 pub struct CipClient {
-    client: Box<dyn Client>
+    client: Box<dyn Client>,
 }
 
 impl CipClient {
     pub fn new(client: impl Client + 'static) -> Self {
-        Self { client: Box::new(client) }
+        Self {
+            client: Box::new(client),
+        }
     }
 
     pub async fn connect(&mut self) {
@@ -362,117 +418,168 @@ impl CipClient {
         self.client.close_session().await;
     }
 
-    pub async fn call_service(&mut self, class_id: u32, instance_id: u32, service_num: u8, data: Vec<u8>) -> MessageRouterResponse {
+    pub async fn call_service(
+        &mut self,
+        class_id: u32,
+        instance_id: u32,
+        service_num: u8,
+        data: Vec<u8>,
+    ) -> MessageRouterResponse {
         let mut class_segment = LogicalSegment::new();
-        let mut instance_segment = LogicalSegment::new(); 
-    
-        let new_service_num = service_num;// & 0b01111111;
-    
+        let mut instance_segment = LogicalSegment::new();
+
+        let new_service_num = service_num; // & 0b01111111;
+
         class_segment.set_segment(LogicalType::ClassId as u8, class_id);
         instance_segment.set_segment(LogicalType::InstanceId as u8, instance_id);
-    
-        let mut epath  = EPath::new();
+
+        let mut epath = EPath::new();
         epath.attributes.push(Box::new(class_segment));
         epath.attributes.push(Box::new(instance_segment));
-    
-        let request = MessageRouterRequest { service: new_service_num, epath, data };
+
+        let request = MessageRouterRequest {
+            service: new_service_num,
+            epath,
+            data,
+        };
 
         self.send_unconnected_cm(request).await;
 
         let data = self.client.read_data().await;
-    
+
         let result = MessageRouterResponse::deserialize(&data.data).unwrap();
         return result.1;
     }
 
     pub async fn send_unconnected_cm(&mut self, request: MessageRouterRequest) {
-        let mut unconnected_send_epath  = EPath::new();
+        let mut unconnected_send_epath = EPath::new();
         let mut port_segment = PortSegment::new();
         port_segment.set_address(alloc::vec![2]);
-        unconnected_send_epath.attributes.push(Box::new(port_segment));
-    
-        let mut epath  = EPath::new();
-        let connection_manager_class = LogicalSegment::init(LogicalType::ClassId as u8, CipClass::ConnectionManager as u32);
+        unconnected_send_epath
+            .attributes
+            .push(Box::new(port_segment));
+
+        let mut epath = EPath::new();
+        let connection_manager_class = LogicalSegment::init(
+            LogicalType::ClassId as u8,
+            CipClass::ConnectionManager as u32,
+        );
         let connection_manager_instance = LogicalSegment::init(LogicalType::InstanceId as u8, 0x1);
         epath.attributes.push(Box::new(connection_manager_class));
         epath.attributes.push(Box::new(connection_manager_instance));
-    
+
         let mut identity_class_segment = LogicalSegment::new();
-        let mut identity_instance_segment = LogicalSegment::new(); 
-    
+        let mut identity_instance_segment = LogicalSegment::new();
+
         identity_class_segment.set_segment(LogicalType::ClassId as u8, CipClass::Identity as u32);
         identity_instance_segment.set_segment(LogicalType::InstanceId as u8, 1);
-    
-        let mut identity_epath  = EPath::new();
-        identity_epath.attributes.push(Box::new(identity_class_segment));
-        identity_epath.attributes.push(Box::new(identity_instance_segment));
-    
-        let request = MessageRouterRequest { service: 0x52, epath, data: UnconnectedSendRequest { priority: 0b11, timeout_ticks: 240, message_request: request, route_path: unconnected_send_epath }.serialize() };
-    
+
+        let mut identity_epath = EPath::new();
+        identity_epath
+            .attributes
+            .push(Box::new(identity_class_segment));
+        identity_epath
+            .attributes
+            .push(Box::new(identity_instance_segment));
+
+        let request = MessageRouterRequest {
+            service: 0x52,
+            epath,
+            data: UnconnectedSendRequest {
+                priority: 0b11,
+                timeout_ticks: 240,
+                message_request: request,
+                route_path: unconnected_send_epath,
+            }
+            .serialize(),
+        };
+
         self.client.send_unconnected(request.serialize()).await;
     }
 
     pub async fn get_supported_classes(&mut self) -> Vec<u16> {
         let mut class_segment = LogicalSegment::new();
-        let mut instance_segment = LogicalSegment::new(); 
-        let mut attribute_segment = LogicalSegment::new(); 
-    
+        let mut instance_segment = LogicalSegment::new();
+        let mut attribute_segment = LogicalSegment::new();
+
         class_segment.set_segment(LogicalType::ClassId as u8, CipClass::MessageRouter as u32);
         instance_segment.set_segment(LogicalType::InstanceId as u8, 1);
         attribute_segment.set_segment(LogicalType::AttributeId as u8, 1);
-    
-        let mut epath  = EPath::new();
+
+        let mut epath = EPath::new();
         epath.attributes.push(Box::new(class_segment));
         epath.attributes.push(Box::new(instance_segment));
         epath.attributes.push(Box::new(attribute_segment));
-    
-        let request = MessageRouterRequest { service: CipService::GetAttributesAll as u8, epath, data: alloc::vec![] };
+
+        let request = MessageRouterRequest {
+            service: CipService::GetAttributesAll as u8,
+            epath,
+            data: alloc::vec![],
+        };
         self.send_unconnected(request.serialize()).await;
         let data = self.client.read_data().await;
-    
+
         let response = MessageRouterResponse::deserialize(&data.data).unwrap();
         let get_all_response = MessageRouter::deserialize(&response.1.data).unwrap();
-    
+
         return get_all_response.1.objects;
     }
-    
-    pub async fn get_attribute_single(&mut self, class_id: u32, instance_id: u32, attribute_id: u32) -> MessageRouterResponse {
+
+    pub async fn get_attribute_single(
+        &mut self,
+        class_id: u32,
+        instance_id: u32,
+        attribute_id: u32,
+    ) -> MessageRouterResponse {
         let mut class_segment = LogicalSegment::new();
-        let mut instance_segment = LogicalSegment::new(); 
-        let mut attribute_segment = LogicalSegment::new(); 
-    
+        let mut instance_segment = LogicalSegment::new();
+        let mut attribute_segment = LogicalSegment::new();
+
         class_segment.set_segment(LogicalType::ClassId as u8, class_id);
         instance_segment.set_segment(LogicalType::InstanceId as u8, instance_id);
         attribute_segment.set_segment(LogicalType::AttributeId as u8, attribute_id);
-    
-        let mut epath  = EPath::new();
+
+        let mut epath = EPath::new();
         epath.attributes.push(Box::new(class_segment));
         epath.attributes.push(Box::new(instance_segment));
         epath.attributes.push(Box::new(attribute_segment));
-    
-        let request = MessageRouterRequest { service: CipService::GetAttributeSingle as u8, epath, data: alloc::vec![] };
+
+        let request = MessageRouterRequest {
+            service: CipService::GetAttributeSingle as u8,
+            epath,
+            data: alloc::vec![],
+        };
         self.send_unconnected_cm(request).await;
         let data = self.client.read_data().await;
-    
+
         let result = MessageRouterResponse::deserialize(&data.data).unwrap();
         return result.1;
     }
-    
-    pub async fn set_attribute_single(&mut self, class_id: u32, instance_id: u32, attribute_id: u32) -> MessageRouterResponse {
+
+    pub async fn set_attribute_single(
+        &mut self,
+        class_id: u32,
+        instance_id: u32,
+        attribute_id: u32,
+    ) -> MessageRouterResponse {
         let mut class_segment = LogicalSegment::new();
-        let mut instance_segment = LogicalSegment::new(); 
-        let mut attribute_segment = LogicalSegment::new(); 
-    
+        let mut instance_segment = LogicalSegment::new();
+        let mut attribute_segment = LogicalSegment::new();
+
         class_segment.set_segment(LogicalType::ClassId as u8, class_id);
         instance_segment.set_segment(LogicalType::InstanceId as u8, instance_id);
         attribute_segment.set_segment(LogicalType::AttributeId as u8, attribute_id);
-    
-        let mut epath  = EPath::new();
+
+        let mut epath = EPath::new();
         epath.attributes.push(Box::new(class_segment));
         epath.attributes.push(Box::new(instance_segment));
         epath.attributes.push(Box::new(attribute_segment));
-    
-        let request = MessageRouterRequest { service: CipService::SetAttributeSingle as u8, epath, data: alloc::vec![] };
+
+        let request = MessageRouterRequest {
+            service: CipService::SetAttributeSingle as u8,
+            epath,
+            data: alloc::vec![],
+        };
         self.send_unconnected_cm(request).await;
         let data = self.client.read_data().await;
         let result = MessageRouterResponse::deserialize(&data.data).unwrap();
