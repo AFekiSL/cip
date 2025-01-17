@@ -93,7 +93,7 @@ impl Client for TcpEnipClient {
         };
         let tx_buf = header.serialize();
         println!("begin session send: {:?}", tx_buf);
-        let _ = self.send_packet(tx_buf);
+        let _ = self.send_packet(tx_buf).await;
 
         let buf = self.read_packet().await;
         println!("begin session receive: {:?}", buf);
