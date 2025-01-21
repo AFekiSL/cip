@@ -1,6 +1,10 @@
+use crate::{common::Serializable, cpf::CommonPacketList};
 use alloc::vec::Vec;
-use nom::{number::complete::{le_u16, le_u32, le_u64}, sequence::tuple, IResult};
-use crate::{cpf::CommonPacketList, common::Serializable};
+use nom::{
+    number::complete::{le_u16, le_u32, le_u64},
+    sequence::tuple,
+    IResult,
+};
 
 pub trait ENIPPacket: Serializable + Sized {
     fn set_session(&mut self, session_handle: u32);
@@ -12,14 +16,25 @@ pub struct EtherNetIPHeader {
     pub session_handle: u32,
     pub status: u32,
     pub sender_context: u64,
-    pub options: u32
+    pub options: u32,
 }
 
 impl Serializable for EtherNetIPHeader {
     fn deserialize(input: &[u8]) -> IResult<&[u8], EtherNetIPHeader> {
-        let (input, (command, length, session_handle, status, sender_context, options)) = tuple((le_u16, le_u16, le_u32, le_u32, le_u64, le_u32))(input)?;
+        let (input, (command, length, session_handle, status, sender_context, options)) =
+            tuple((le_u16, le_u16, le_u32, le_u32, le_u64, le_u32))(input)?;
 
-        return Ok((input, EtherNetIPHeader { command, length, session_handle, status, sender_context, options }))
+        return Ok((
+            input,
+            EtherNetIPHeader {
+                command,
+                length,
+                session_handle,
+                status,
+                sender_context,
+                options,
+            },
+        ));
     }
 
     fn serialize(&self) -> Vec<u8> {
@@ -31,7 +46,7 @@ impl Serializable for EtherNetIPHeader {
         vec.extend_from_slice(&self.sender_context.to_le_bytes());
         vec.extend_from_slice(&self.options.to_le_bytes());
 
-        return vec;  
+        return vec;
     }
 }
 
@@ -46,7 +61,7 @@ pub type UnregisterSession = EtherNetIPHeader;
 pub struct RegisterSession {
     pub header: EtherNetIPHeader,
     pub version: u16,
-    pub options: u16
+    pub options: u16,
 }
 
 impl Serializable for RegisterSession {
@@ -54,7 +69,14 @@ impl Serializable for RegisterSession {
         let header = EtherNetIPHeader::deserialize(input)?;
         let (input, (version, options)) = tuple((le_u16, le_u16))(header.0)?;
 
-        return Ok((input, RegisterSession { header: header.1, version, options}))
+        return Ok((
+            input,
+            RegisterSession {
+                header: header.1,
+                version,
+                options,
+            },
+        ));
     }
 
     fn serialize(&self) -> Vec<u8> {
@@ -63,7 +85,7 @@ impl Serializable for RegisterSession {
         vec.extend_from_slice(&self.version.to_le_bytes());
         vec.extend_from_slice(&self.options.to_le_bytes());
 
-        return vec;  
+        return vec;
     }
 }
 
@@ -77,7 +99,7 @@ pub struct SendUnitData {
     pub header: EtherNetIPHeader,
     pub interface_handle: u32,
     pub timeout: u16,
-    pub items: CommonPacketList
+    pub items: CommonPacketList,
 }
 
 impl Serializable for SendUnitData {
@@ -86,7 +108,15 @@ impl Serializable for SendUnitData {
         let (input, (interface_handle, timeout)) = tuple((le_u32, le_u16))(header.0)?;
         let common_packet_items = CommonPacketList::deserialize(input)?;
 
-        return Ok((common_packet_items.0, SendUnitData { header: header.1, interface_handle, timeout, items: common_packet_items.1 }))
+        return Ok((
+            common_packet_items.0,
+            SendUnitData {
+                header: header.1,
+                interface_handle,
+                timeout,
+                items: common_packet_items.1,
+            },
+        ));
     }
 
     fn serialize(&self) -> Vec<u8> {
@@ -101,7 +131,7 @@ impl Serializable for SendUnitData {
             vec.extend(self.items.serialize());
         }
 
-        return vec;  
+        return vec;
     }
 }
 
@@ -115,7 +145,7 @@ pub struct SendRRData {
     pub header: EtherNetIPHeader,
     pub interface_handle: u32,
     pub timeout: u16,
-    pub items: CommonPacketList
+    pub items: CommonPacketList,
 }
 
 impl Serializable for SendRRData {
@@ -124,7 +154,15 @@ impl Serializable for SendRRData {
         let (input, (interface_handle, timeout)) = tuple((le_u32, le_u16))(header.0)?;
         let common_packet_items = CommonPacketList::deserialize(input)?;
 
-        return Ok((common_packet_items.0, SendRRData { header: header.1, interface_handle, timeout, items: common_packet_items.1 }))
+        return Ok((
+            common_packet_items.0,
+            SendRRData {
+                header: header.1,
+                interface_handle,
+                timeout,
+                items: common_packet_items.1,
+            },
+        ));
     }
 
     fn serialize(&self) -> Vec<u8> {
@@ -134,12 +172,13 @@ impl Serializable for SendRRData {
         vec.extend_from_slice(&self.timeout.to_le_bytes());
 
         if self.items.len() > 0 {
+            // Length is aready serialized here
             vec.extend_from_slice(&self.items.len().to_le_bytes());
 
             vec.extend(self.items.serialize());
         }
 
-        return vec;  
+        return vec;
     }
 }
 
@@ -151,14 +190,20 @@ impl ENIPPacket for SendRRData {
 
 pub struct NOP {
     pub header: EtherNetIPHeader,
-    pub data: Vec<u8>
+    pub data: Vec<u8>,
 }
 
 impl Serializable for NOP {
     fn deserialize(input: &[u8]) -> IResult<&[u8], NOP> {
         let header = EtherNetIPHeader::deserialize(input)?;
 
-        return Ok((input, NOP { header: header.1, data: header.0.to_vec()}))
+        return Ok((
+            input,
+            NOP {
+                header: header.1,
+                data: header.0.to_vec(),
+            },
+        ));
     }
 
     fn serialize(&self) -> Vec<u8> {
@@ -168,7 +213,7 @@ impl Serializable for NOP {
             vec.push(n)
         }
 
-        return vec;  
+        return vec;
     }
 }
 
