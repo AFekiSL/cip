@@ -1,7 +1,10 @@
 use alloc::vec::Vec;
 use rand::Rng;
 
-use crate::{cip::{EPath, MessageRouterRequest}, common::Serializable};
+use crate::{
+    cip::{EPath, MessageRouterRequest},
+    common::Serializable,
+};
 
 pub struct ForwardOpenRequest {
     pub priority: u8,
@@ -13,15 +16,18 @@ pub struct ForwardOpenRequest {
     pub original_serial_number: u32,
     pub connection_timeout_multiplier: u8,
     pub ot_rpi: u32,
-    pub ot_network_parameters: u16,
+    pub ot_network_parameters: u32,
     pub to_rpi: u32,
-    pub to_network_parameters: u16,
+    pub to_network_parameters: u32,
     pub transport_class: u8,
-    pub connection_path: EPath
+    pub connection_path: EPath,
 }
 
 impl Serializable for ForwardOpenRequest {
-    fn deserialize(input: &[u8]) -> nom::IResult<&[u8], Self> where Self: Sized {
+    fn deserialize(input: &[u8]) -> nom::IResult<&[u8], Self>
+    where
+        Self: Sized,
+    {
         todo!()
     }
 
@@ -35,13 +41,14 @@ impl Serializable for ForwardOpenRequest {
         vec.extend_from_slice(&self.original_vendor_id.to_le_bytes());
         vec.extend_from_slice(&self.original_serial_number.to_le_bytes());
         vec.push(self.connection_timeout_multiplier);
-        vec.push(0);vec.push(0);vec.push(0);
+        vec.push(0);
+        vec.push(0);
+        vec.push(0);
         vec.extend_from_slice(&self.ot_rpi.to_le_bytes());
         vec.extend_from_slice(&self.ot_network_parameters.to_le_bytes());
         vec.extend_from_slice(&self.to_rpi.to_le_bytes());
         vec.extend_from_slice(&self.to_network_parameters.to_le_bytes());
         vec.push(self.transport_class);
-        
 
         let mut segments = Vec::new();
 
@@ -63,21 +70,21 @@ impl ForwardOpenRequest {
     pub fn create_null_forward_open(path: EPath) -> ForwardOpenRequest {
         let mut rng = rand::thread_rng();
 
-        ForwardOpenRequest { 
-            priority: 0, 
-            timeout_ticks: 255, 
-            ot_network_connection_id: 0, 
-            to_network_connection_id: 0, 
-            connection_serial_number: rng.gen(), 
-            original_vendor_id: 0x1, 
-            original_serial_number: 0x12345678, 
-            connection_timeout_multiplier: 0, 
-            ot_rpi: 0, 
-            ot_network_parameters: 0, 
-            to_rpi: 0, 
-            to_network_parameters: 0, 
-            transport_class: 0, 
-            connection_path: path
+        ForwardOpenRequest {
+            priority: 0,
+            timeout_ticks: 255,
+            ot_network_connection_id: 0,
+            to_network_connection_id: 0,
+            connection_serial_number: rng.gen(),
+            original_vendor_id: 0x1,
+            original_serial_number: 0x12345678,
+            connection_timeout_multiplier: 0,
+            ot_rpi: 0,
+            ot_network_parameters: 0,
+            to_rpi: 0,
+            to_network_parameters: 0,
+            transport_class: 0,
+            connection_path: path,
         }
     }
 }
@@ -86,11 +93,14 @@ pub struct UnconnectedSendRequest {
     pub priority: u8,
     pub timeout_ticks: u8,
     pub message_request: MessageRouterRequest,
-    pub route_path: EPath
+    pub route_path: EPath,
 }
 
 impl Serializable for UnconnectedSendRequest {
-    fn deserialize(input: &[u8]) -> nom::IResult<&[u8], Self> where Self: Sized {
+    fn deserialize(input: &[u8]) -> nom::IResult<&[u8], Self>
+    where
+        Self: Sized,
+    {
         todo!()
     }
 
