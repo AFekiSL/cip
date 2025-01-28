@@ -7,7 +7,7 @@ use crate::{
     objects::{connection_manager::UnconnectedSendRequest, message_router::MessageRouter},
 };
 
-pub trait EpathSegments: Serializable {
+pub trait EpathSegments: Serializable + Send {
     fn get_type(&self) -> u8;
     fn get_data(&self) -> Vec<u8>;
 }
