@@ -277,6 +277,9 @@ impl Client for TcpEnipClient {
         self.send_unconnected(data_frame).await;
         println!("forward open sent");
 
+        println!("reading data after forward open ...");
+        let data_result = self.read_data().await;
+        println!("data result: data: {:x?}", data_result.data);
         self.connection_id = 0x00000011;
     }
 }
