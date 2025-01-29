@@ -389,6 +389,7 @@ pub trait Client: Send {
     async fn read_data(&mut self) -> DataResult;
     async fn send_nop(&mut self);
     async fn close_session(&mut self);
+    async fn forward_open(&mut self);
 }
 
 pub struct CipClient {

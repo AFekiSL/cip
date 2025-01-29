@@ -77,65 +77,6 @@ impl TcpEnipClient {
             }
         }
     }
-
-    pub async fn forward_open(&mut self) {
-        let mut epath = EPath::new();
-        let connection_manager_class = LogicalSegment::init(
-            LogicalType::ClassId as u8,
-            CipClass::ConnectionManager as u32,
-        );
-        let connection_manager_instance = LogicalSegment::init(LogicalType::InstanceId as u8, 0x1);
-        epath.attributes.push(Box::new(connection_manager_class));
-        epath.attributes.push(Box::new(connection_manager_instance));
-
-        let mut forward_open_epath = EPath::new();
-        forward_open_epath
-            .attributes
-            .push(Box::new(LogicalSegment::init(
-                LogicalType::ClassId as u8,
-                CipClass::MessageRouter as u32,
-            )));
-        forward_open_epath
-            .attributes
-            .push(Box::new(LogicalSegment::init(
-                LogicalType::InstanceId as u8,
-                0x01,
-            )));
-
-        // Initial network parameters based on CIP Vol 1, 3-5.5.1.1
-        let init_net_params: u16 = 0b_0100_0010_0000_0000; // Equivalent to 0x4200
-        let connection_size: u32 = 4000;
-        let net_params =
-            ((connection_size as u32 & 0xFFFF) | ((init_net_params as u32) << 16)) as u32;
-        println!("net params: {:x}", net_params);
-        let request = MessageRouterRequest {
-            service: 0x5B,
-            epath,
-            data: cip::common::Serializable::serialize(&ForwardOpenRequest {
-                priority: 0x0A,
-                timeout_ticks: 0x05,
-                ot_network_connection_id: 0x00000011, // client side (labitude)
-                to_network_connection_id: 0x71190427, // server side (pump)
-                connection_serial_number: 0x0427,     // It should be unique for each connection
-                original_vendor_id: 0x1009,           // Vendor ID of the client? Labitude
-                original_serial_number: 241216,       // PLC serial number
-                connection_timeout_multiplier: 0x07,
-                ot_rpi: 0x00204001, // timeout in micro-seconds
-                ot_network_parameters: net_params,
-                to_rpi: 0x00204001, //timeout in micro-seconds
-                to_network_parameters: net_params,
-                transport_class: 0xA3,
-                connection_path: forward_open_epath,
-            }),
-        };
-
-        let data_frame = cip::common::Serializable::serialize(&request);
-        println!("data frame to send: {:x?}", data_frame);
-        self.send_unconnected(data_frame).await;
-        println!("forward open sent");
-
-        self.connection_id = 0x00000011;
-    }
 }
 
 #[async_trait]
@@ -278,5 +219,64 @@ impl Client for TcpEnipClient {
             status: enip.1.status,
             data,
         };
+    }
+
+    async fn forward_open(&mut self) {
+        let mut epath = EPath::new();
+        let connection_manager_class = LogicalSegment::init(
+            LogicalType::ClassId as u8,
+            CipClass::ConnectionManager as u32,
+        );
+        let connection_manager_instance = LogicalSegment::init(LogicalType::InstanceId as u8, 0x1);
+        epath.attributes.push(Box::new(connection_manager_class));
+        epath.attributes.push(Box::new(connection_manager_instance));
+
+        let mut forward_open_epath = EPath::new();
+        forward_open_epath
+            .attributes
+            .push(Box::new(LogicalSegment::init(
+                LogicalType::ClassId as u8,
+                CipClass::MessageRouter as u32,
+            )));
+        forward_open_epath
+            .attributes
+            .push(Box::new(LogicalSegment::init(
+                LogicalType::InstanceId as u8,
+                0x01,
+            )));
+
+        // Initial network parameters based on CIP Vol 1, 3-5.5.1.1
+        let init_net_params: u16 = 0b_0100_0010_0000_0000; // Equivalent to 0x4200
+        let connection_size: u32 = 4000;
+        let net_params =
+            ((connection_size as u32 & 0xFFFF) | ((init_net_params as u32) << 16)) as u32;
+        println!("net params: {:x}", net_params);
+        let request = MessageRouterRequest {
+            service: 0x5B,
+            epath,
+            data: cip::common::Serializable::serialize(&ForwardOpenRequest {
+                priority: 0x0A,
+                timeout_ticks: 0x05,
+                ot_network_connection_id: 0x00000011, // client side (labitude)
+                to_network_connection_id: 0x71190427, // server side (pump)
+                connection_serial_number: 0x0427,     // It should be unique for each connection
+                original_vendor_id: 0x1009,           // Vendor ID of the client? Labitude
+                original_serial_number: 241216,       // PLC serial number
+                connection_timeout_multiplier: 0x07,
+                ot_rpi: 0x00204001, // timeout in micro-seconds
+                ot_network_parameters: net_params,
+                to_rpi: 0x00204001, //timeout in micro-seconds
+                to_network_parameters: net_params,
+                transport_class: 0xA3,
+                connection_path: forward_open_epath,
+            }),
+        };
+
+        let data_frame = cip::common::Serializable::serialize(&request);
+        println!("data frame to send: {:x?}", data_frame);
+        self.send_unconnected(data_frame).await;
+        println!("forward open sent");
+
+        self.connection_id = 0x00000011;
     }
 }
