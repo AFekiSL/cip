@@ -1,3 +1,5 @@
+use std::{thread::sleep, time::Duration};
+
 use crate::{
     common::Serializable,
     cpf::{
@@ -274,6 +276,7 @@ impl Client for TcpEnipClient {
         let data_frame = cip::common::Serializable::serialize(&request);
         println!("data frame to send: {:x?}", data_frame);
         self.send_unconnected(data_frame).await;
+        sleep(Duration::from_secs(2));
         println!("forward open sent");
 
         println!("reading data after forward open ...");
