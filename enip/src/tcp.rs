@@ -146,7 +146,7 @@ impl Client for TcpEnipClient {
         let packet = SendRRData {
             header: header,
             interface_handle: 0,
-            timeout: 0,
+            timeout: 10,
             items: list,
         };
         self.send_packet(packet.serialize()).await;
