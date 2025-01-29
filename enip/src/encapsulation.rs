@@ -24,6 +24,7 @@ impl Serializable for EtherNetIPHeader {
         let (input, (command, length, session_handle, status, sender_context, options)) =
             tuple((le_u16, le_u16, le_u32, le_u32, le_u64, le_u32))(input)?;
 
+        println!("command: {}, length: {}, session handle: {}, status: {}, sender context: {}, options: {}", command, length, session_handle, status, sender_context, options);
         return Ok((
             input,
             EtherNetIPHeader {
