@@ -20,7 +20,7 @@ use tokio::{
 
 pub struct TcpEnipClient {
     pub session_handle: u32,
-    connection_id: u32,
+    pub connection_id: u32,
     tcp: TcpStream,
 }
 
