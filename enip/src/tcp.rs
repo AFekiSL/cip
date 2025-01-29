@@ -156,7 +156,7 @@ impl Client for TcpEnipClient {
         let header = EtherNetIPHeader {
             command: 0x70,
             session_handle: self.session_handle,
-            length: (packet.len() as u16 + 16),
+            length: (packet.len() as u16 + 16 + 4),
             status: 0,
             sender_context: 0,
             options: 0,

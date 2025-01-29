@@ -126,7 +126,7 @@ impl Serializable for SendUnitData {
         vec.extend_from_slice(&self.timeout.to_le_bytes());
 
         if self.items.len() > 0 {
-            vec.extend_from_slice(&self.items.len().to_le_bytes());
+            vec.extend_from_slice(&(self.items.len()).to_le_bytes());
 
             vec.extend(self.items.serialize());
         }
