@@ -279,7 +279,19 @@ impl Client for TcpEnipClient {
 
         println!("reading data after forward open ...");
         let data_result = self.read_data().await;
-        println!("data result: data: {:x?}", data_result.data);
+        // Extract bytes from position 4 to 7
+        let extracted_bytes = &data_result.data[4..8];
+
+        // Convert to u32 (little-endian)
+        let value = u32::from_le_bytes([
+            extracted_bytes[0],
+            extracted_bytes[1],
+            extracted_bytes[2],
+            extracted_bytes[3],
+        ]);
+
+        // Print result in hexadecimal format
+        println!("Extracted value: 0x{:08X}", value);
         self.connection_id = 0x00000011;
     }
 }
