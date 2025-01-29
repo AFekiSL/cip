@@ -203,23 +203,7 @@ impl Client for TcpEnipClient {
 
     async fn read_data(&mut self) -> DataResult {
         let result = self.read_packet().await;
-        println!("read_date: {:?}", result);
-        println!("read_data length: {}", result.len());
-        // Extract bytes from position 4 to 7
-        let extracted_bytes = &result[4..8];
-
-        // Convert to u32 (little-endian)
-        let value = u32::from_le_bytes([
-            extracted_bytes[0],
-            extracted_bytes[1],
-            extracted_bytes[2],
-            extracted_bytes[3],
-        ]);
-
-        // Print result in hexadecimal format
-        println!("Extracted value: 0x{:08X}", value);
-
-        let enip = EtherNetIPHeader::deserialize(&result).unwrap();
+        let enip: (&[u8], EtherNetIPHeader) = EtherNetIPHeader::deserialize(&result).unwrap();
         let mut data = Vec::new();
 
         if enip.1.command == 0x006F {
@@ -232,7 +216,7 @@ impl Client for TcpEnipClient {
 
         return DataResult {
             status: enip.1.status,
-            data,
+            data: result, // return all the received data so I deserialize it again
         };
     }
 
@@ -294,7 +278,16 @@ impl Client for TcpEnipClient {
 
         println!("reading data after forward open ...");
         let data_result = self.read_data().await;
+        let (data, enip_header) = EtherNetIPHeader::deserialize(&data_result.data).unwrap();
 
+        if enip_header.command != 0x006f {
+            panic!(
+                "wrong command! 0x006F expected. {} found",
+                enip_header.command
+            );
+        }
+
+        self.session_handle = enip_header.session_handle;
         self.connection_id = 0x00000011;
     }
 }

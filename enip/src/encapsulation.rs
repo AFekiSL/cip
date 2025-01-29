@@ -1,3 +1,5 @@
+use core::time;
+
 use crate::{common::Serializable, cpf::CommonPacketList};
 use alloc::vec::Vec;
 use nom::{
@@ -153,6 +155,11 @@ impl Serializable for SendRRData {
     fn deserialize(input: &[u8]) -> IResult<&[u8], SendRRData> {
         let header = EtherNetIPHeader::deserialize(input)?;
         let (input, (interface_handle, timeout)) = tuple((le_u32, le_u16))(header.0)?;
+        println!(
+            "interface handle: {}, timeout: {}",
+            interface_handle, timeout
+        );
+
         let common_packet_items = CommonPacketList::deserialize(input)?;
 
         return Ok((
