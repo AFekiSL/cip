@@ -148,7 +148,7 @@ impl Client for TcpEnipClient {
         let packet = SendRRData {
             header: header,
             interface_handle: 0,
-            timeout: 10,
+            timeout: 100,
             items: list,
         };
         self.send_packet(packet.serialize()).await;
@@ -181,7 +181,7 @@ impl Client for TcpEnipClient {
         let packet = SendUnitData {
             header: header,
             interface_handle: 0,
-            timeout: 10,
+            timeout: 100,
             items: list,
         };
         self.send_packet(packet.serialize()).await;
@@ -276,7 +276,6 @@ impl Client for TcpEnipClient {
         let data_frame = cip::common::Serializable::serialize(&request);
         println!("data frame to send: {:x?}", data_frame);
         self.send_unconnected(data_frame).await;
-        sleep(Duration::from_secs(2));
         println!("forward open sent");
 
         println!("reading data after forward open ...");
