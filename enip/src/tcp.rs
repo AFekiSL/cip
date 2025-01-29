@@ -179,7 +179,7 @@ impl Client for TcpEnipClient {
         let packet = SendUnitData {
             header: header,
             interface_handle: 0,
-            timeout: 0,
+            timeout: 10,
             items: list,
         };
         self.send_packet(packet.serialize()).await;
