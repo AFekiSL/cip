@@ -88,7 +88,7 @@ impl Client for TcpEnipClient {
                 length: 4,
                 session_handle: 0,
                 status: 0,
-                sender_context: 0,
+                sender_context: 0x5f7079636f6d6d5f,
                 options: 0,
             },
             version: 1,
@@ -115,7 +115,7 @@ impl Client for TcpEnipClient {
             length: 0,
             session_handle: self.session_handle,
             status: 0,
-            sender_context: 0,
+            sender_context: 0x5f7079636f6d6d5f,
             options: 0,
         };
         let _ = self.send_packet(unreg.serialize());
@@ -128,7 +128,7 @@ impl Client for TcpEnipClient {
             session_handle: self.session_handle,
             length: (packet.len() as u16 + 16),
             status: 0,
-            sender_context: 0,
+            sender_context: 0x5f7079636f6d6d5f,
             options: 0,
         };
         let mut list: CommonPacketList = CommonPacketList::new();
@@ -158,7 +158,7 @@ impl Client for TcpEnipClient {
             session_handle: self.session_handle,
             length: (packet.len() as u16 + 16 + 4),
             status: 0,
-            sender_context: 0,
+            sender_context: 0x5f7079636f6d6d5f,
             options: 0,
         };
         let mut list: CommonPacketList = CommonPacketList::new();
