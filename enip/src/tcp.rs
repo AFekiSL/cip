@@ -279,6 +279,7 @@ impl Client for TcpEnipClient {
 
         println!("reading data after forward open ...");
         let data_result = self.read_data().await;
+        println!("read_data length: {}", data_result.data.len());
         // Extract bytes from position 4 to 7
         let extracted_bytes = &data_result.data[4..8];
 
