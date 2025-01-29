@@ -279,18 +279,18 @@ impl Client for TcpEnipClient {
         sleep(Duration::from_secs(2));
         println!("forward open sent");
 
-        println!("reading data after forward open ...");
-        let data_result = self.read_data().await;
-        let (data, enip_header) = EtherNetIPHeader::deserialize(&data_result.data).unwrap();
+        // println!("reading data after forward open ...");
+        // let data_result = self.read_data().await;
+        // let (data, enip_header) = EtherNetIPHeader::deserialize(&data_result.data).unwrap();
 
-        if enip_header.command != 0x006f {
-            panic!(
-                "wrong command! 0x006F expected. {} found",
-                enip_header.command
-            );
-        }
+        // if enip_header.command != 0x006f {
+        //     panic!(
+        //         "wrong command! 0x006F expected. {} found",
+        //         enip_header.command
+        //     );
+        // }
 
-        self.session_handle = enip_header.session_handle;
-        self.connection_id = 0x00000011;
+        // self.session_handle = enip_header.session_handle;
+        // self.connection_id = 0x00000011;
     }
 }
