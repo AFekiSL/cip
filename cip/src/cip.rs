@@ -594,4 +594,8 @@ impl CipClient {
     pub async fn send_connected(&mut self, packet: Vec<u8>) {
         self.client.send_connected(packet).await;
     }
+
+    pub async fn forward_open(&mut self) {
+        self.client.forward_open().await;
+    }
 }
