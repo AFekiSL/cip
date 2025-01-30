@@ -258,7 +258,7 @@ impl Client for TcpEnipClient {
             data: cip::common::Serializable::serialize(&ForwardOpenRequest {
                 priority: 0x0A,
                 timeout_ticks: 0x05,
-                ot_network_connection_id: 0x00000011, // client side (labitude)
+                ot_network_connection_id: 0x00000000, // client side (labitude)
                 to_network_connection_id: 0x71190427, // server side (pump)
                 connection_serial_number: 0x0427,     // It should be unique for each connection
                 original_vendor_id: 0x1009,           // Vendor ID of the client? Labitude
@@ -289,7 +289,7 @@ impl Client for TcpEnipClient {
             );
         }
 
-        self.session_handle = enip_header.session_handle;
-        self.connection_id = 0x00000011;
+        // self.session_handle = enip_header.session_handle;
+        self.connection_id = 0x00000000; //11
     }
 }
