@@ -7,6 +7,7 @@ use crate::{
     objects::{connection_manager::UnconnectedSendRequest, message_router::MessageRouter},
 };
 
+// needs to be Send in my case
 pub trait EpathSegments: Serializable + Send {
     fn get_type(&self) -> u8;
     fn get_data(&self) -> Vec<u8>;
@@ -362,6 +363,7 @@ impl Serializable for MessageRouterResponse {
 
         let mut additional_status = Vec::new();
 
+        // additional status need to be treated if the exist
         if size_of_additional_status != 0 {
             println!("additional status size: {} != 0", size_of_additional_status);
             for i in 0..size_of_additional_status {
@@ -370,7 +372,6 @@ impl Serializable for MessageRouterResponse {
                 additional_status.push(partial_additional_status);
             }
         }
-        println!("final data: {:X?}", input);
 
         return Ok((
             &input,

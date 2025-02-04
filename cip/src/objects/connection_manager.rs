@@ -16,9 +16,9 @@ pub struct ForwardOpenRequest {
     pub original_serial_number: u32,
     pub connection_timeout_multiplier: u8,
     pub ot_rpi: u32,
-    pub ot_network_parameters: u32,
+    pub ot_network_parameters: u32, // 4 bytes
     pub to_rpi: u32,
-    pub to_network_parameters: u32,
+    pub to_network_parameters: u32, // 4 bytes
     pub transport_class: u8,
     pub connection_path: EPath,
 }

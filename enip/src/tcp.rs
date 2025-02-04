@@ -154,7 +154,7 @@ impl Client for TcpEnipClient {
         let header = EtherNetIPHeader {
             command: 0x70,
             session_handle: self.session_handle,
-            length: (packet.len() as u16 + 16 + 4),
+            length: (packet.len() as u16 + 20), // 16 + 4 ; 4 is the length of list.connected_addr_item.length ;)
             status: 0,
             sender_context: 0,
             options: 0,
@@ -336,7 +336,6 @@ impl Client for TcpEnipClient {
                 connection_serial_number: 0x0427, // It should be unique for each connection
                 original_vendor_id: 0x1009,       // Vendor ID of the client? Labitude
                 original_serial_number: 241216,   // PLC serial number
-                // transport_class: 0xA3,
                 connection_path: forward_open_epath,
             }),
         };
@@ -344,5 +343,7 @@ impl Client for TcpEnipClient {
         let data_frame = cip::common::Serializable::serialize(&request);
         self.send_unconnected(data_frame).await;
         println!("forward close sent");
+
+        //TODO: don't forget to read from here and ack the forward close
     }
 }
