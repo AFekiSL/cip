@@ -410,12 +410,14 @@ pub trait Client: Send {
 
 pub struct CipClient {
     client: Box<dyn Client>,
+    cip_sequence_counter: u8,
 }
 
 impl CipClient {
     pub fn new(client: impl Client + 'static) -> Self {
         Self {
             client: Box::new(client),
+            cip_sequence_counter: 0,
         }
     }
 
@@ -590,6 +592,7 @@ impl CipClient {
         class_id: u32,
         instance_id: u32,
         attribute_id: u32,
+        data: Vec<u8>,
     ) -> MessageRouterResponse {
         let mut class_segment = LogicalSegment::new();
         let mut instance_segment = LogicalSegment::new();
@@ -607,11 +610,18 @@ impl CipClient {
         let request = MessageRouterRequest {
             service: CipService::SetAttributeSingle as u8,
             epath,
-            data: alloc::vec![],
+            data,
         };
-        self.send_unconnected_cm(request).await;
+        self.cip_sequence_counter += 1;
+        let mut serialized_request = vec![self.cip_sequence_counter, 0x00];
+        for item in request.serialize() {
+            serialized_request.push(item);
+        }
+        self.send_connected(serialized_request).await;
         let data = self.client.read_data().await;
+
         let result = MessageRouterResponse::deserialize(&data.data).unwrap();
+        println!("final data: {:X?}", result.1.data);
         return result.1;
     }
 

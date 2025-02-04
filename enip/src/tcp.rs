@@ -205,12 +205,14 @@ impl Client for TcpEnipClient {
         // let mut data = Vec::new();
 
         let rrdata = if enip.command == 0x006F {
+            println!("SendRRData deserialize");
             SendRRData::deserialize(&result).unwrap().0
             // println!("final data: {:X?}", rrdata.0);
             // for item in rrdata.1.items.unconnected_data_item {
             //     data.extend_from_slice(&item.data);
             // }
         } else if enip.command == 0x0070 {
+            println!("SendUnitData deserialize");
             SendUnitData::deserialize(&result).unwrap().0
         } else {
             panic!("Other data need to be deserialized");
@@ -344,6 +346,14 @@ impl Client for TcpEnipClient {
         self.send_unconnected(data_frame).await;
         println!("forward close sent");
 
-        //TODO: don't forget to read from here and ack the forward close
+        let data_result = self.read_data().await;
+        let (data, cip) =
+            <MessageRouterResponse as cip::common::Serializable>::deserialize(&data_result.data)
+                .unwrap();
+
+        if cip.general_status != 0 {
+            panic!("forward close fails")
+        }
+        println!("forward close data: {:X?}", data)
     }
 }
