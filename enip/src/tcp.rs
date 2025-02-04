@@ -12,7 +12,14 @@ use crate::{
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use async_trait::async_trait;
-use cip::cip::{Client, DataResult};
+use cip::{
+    cip::{
+        CipClass, Client, DataResult, EPath, LogicalSegment, LogicalType, MessageRouterRequest,
+        MessageRouterResponse,
+    },
+    objects::connection_manager::{ForwardCloseRequest, ForwardOpenRequest},
+};
+use nom::number::complete::le_u32;
 use tokio::{
     io::{self, AsyncReadExt, AsyncWriteExt, Interest},
     net::TcpStream,
@@ -76,6 +83,8 @@ impl TcpEnipClient {
     }
 }
 
+const TO_NETWORK_CONNECTION_ID: u32 = 0x71190427;
+
 #[async_trait]
 impl Client for TcpEnipClient {
     async fn begin_session(&mut self) {
@@ -135,7 +144,7 @@ impl Client for TcpEnipClient {
         let packet = SendRRData {
             header: header,
             interface_handle: 0,
-            timeout: 0,
+            timeout: 100,
             items: list,
         };
         self.send_packet(packet.serialize()).await;
@@ -145,7 +154,7 @@ impl Client for TcpEnipClient {
         let header = EtherNetIPHeader {
             command: 0x70,
             session_handle: self.session_handle,
-            length: (packet.len() as u16 + 16),
+            length: (packet.len() as u16 + 16 + 4),
             status: 0,
             sender_context: 0,
             options: 0,
@@ -168,7 +177,7 @@ impl Client for TcpEnipClient {
         let packet = SendUnitData {
             header: header,
             interface_handle: 0,
-            timeout: 0,
+            timeout: 100,
             items: list,
         };
         self.send_packet(packet.serialize()).await;
@@ -192,20 +201,148 @@ impl Client for TcpEnipClient {
 
     async fn read_data(&mut self) -> DataResult {
         let result = self.read_packet().await;
-        let enip = EtherNetIPHeader::deserialize(&result).unwrap();
-        let mut data = Vec::new();
+        let (_, enip) = EtherNetIPHeader::deserialize(&result).unwrap();
+        // let mut data = Vec::new();
 
-        if enip.1.command == 0x006F {
-            let rrdata = SendRRData::deserialize(&result).unwrap();
-
-            for item in rrdata.1.items.unconnected_data_item {
-                data.extend_from_slice(&item.data);
-            }
-        }
+        let rrdata = if enip.command == 0x006F {
+            SendRRData::deserialize(&result).unwrap().0
+            // println!("final data: {:X?}", rrdata.0);
+            // for item in rrdata.1.items.unconnected_data_item {
+            //     data.extend_from_slice(&item.data);
+            // }
+        } else if enip.command == 0x0070 {
+            SendUnitData::deserialize(&result).unwrap().0
+        } else {
+            panic!("Other data need to be deserialized");
+        };
 
         return DataResult {
-            status: enip.1.status,
-            data,
+            status: enip.status,
+            data: rrdata.to_vec(),
         };
+    }
+
+    async fn forward_open(&mut self) {
+        let mut epath = EPath::new();
+        let connection_manager_class = LogicalSegment::init(
+            LogicalType::ClassId as u8,
+            CipClass::ConnectionManager as u32,
+        );
+        let connection_manager_instance = LogicalSegment::init(LogicalType::InstanceId as u8, 0x1);
+        epath.attributes.push(Box::new(connection_manager_class));
+        epath.attributes.push(Box::new(connection_manager_instance));
+
+        let mut forward_open_epath = EPath::new();
+        forward_open_epath
+            .attributes
+            .push(Box::new(LogicalSegment::init(
+                LogicalType::ClassId as u8,
+                CipClass::MessageRouter as u32,
+            )));
+        forward_open_epath
+            .attributes
+            .push(Box::new(LogicalSegment::init(
+                LogicalType::InstanceId as u8,
+                0x01,
+            )));
+
+        // Initial network parameters based on CIP Vol 1, 3-5.5.1.1: copy paste from python source code
+        let init_net_params: u16 = 0b_0100_0010_0000_0000; // Equivalent to 0x4200
+        let connection_size: u32 = 4000;
+        let net_params =
+            ((connection_size as u32 & 0xFFFF) | ((init_net_params as u32) << 16)) as u32;
+
+        let request = MessageRouterRequest {
+            service: 0x5B, // forward open
+            epath,
+            data: cip::common::Serializable::serialize(&ForwardOpenRequest {
+                priority: 0x0A,
+                timeout_ticks: 0x05,
+                ot_network_connection_id: 0x00000000, // client side (labitude)
+                to_network_connection_id: TO_NETWORK_CONNECTION_ID, // server side (pump)
+                connection_serial_number: 0x0427,     // It should be unique for each connection
+                original_vendor_id: 0x1009,           // Vendor ID of the client? Labitude
+                original_serial_number: 241216,       // PLC serial number
+                connection_timeout_multiplier: 0x07,
+                ot_rpi: 0x00204001, // timeout in micro-seconds
+                ot_network_parameters: net_params,
+                to_rpi: 0x00204001, //timeout in micro-seconds
+                to_network_parameters: net_params,
+                transport_class: 0xA3,
+                connection_path: forward_open_epath,
+            }),
+        };
+
+        let data_frame = cip::common::Serializable::serialize(&request);
+        self.send_unconnected(data_frame).await;
+        println!("forward open sent");
+
+        let data_result = self.read_data().await;
+
+        // data_result.data contains here the CIP & CIP Classe Generic (Command Specific Data)
+        let (data, cip) =
+            <MessageRouterResponse as cip::common::Serializable>::deserialize(&data_result.data)
+                .unwrap();
+
+        if cip.general_status != 0 {
+            panic!("forward open fails")
+        }
+
+        // data is command specific data
+        // first we ge the ot_network_connection_id
+        let (data, ot_network_connection_id) = le_u32::<&[u8], ()>(data).unwrap();
+        println!("connection id: {}", ot_network_connection_id);
+        self.connection_id = ot_network_connection_id;
+
+        // the we get the to_network_connection_id
+        let (_remaining_data, to_network_connection_id) = le_u32::<&[u8], ()>(data).unwrap();
+        if to_network_connection_id != TO_NETWORK_CONNECTION_ID {
+            panic!("to_network_connection_id != 0x71190427")
+        }
+
+        println!("Forward Open Successful");
+    }
+
+    async fn forward_close(&mut self) {
+        let mut epath = EPath::new();
+        let connection_manager_class = LogicalSegment::init(
+            LogicalType::ClassId as u8,
+            CipClass::ConnectionManager as u32,
+        );
+        let connection_manager_instance = LogicalSegment::init(LogicalType::InstanceId as u8, 0x1);
+        epath.attributes.push(Box::new(connection_manager_class));
+        epath.attributes.push(Box::new(connection_manager_instance));
+
+        let mut forward_open_epath = EPath::new();
+        forward_open_epath
+            .attributes
+            .push(Box::new(LogicalSegment::init(
+                LogicalType::ClassId as u8,
+                CipClass::MessageRouter as u32,
+            )));
+        forward_open_epath
+            .attributes
+            .push(Box::new(LogicalSegment::init(
+                LogicalType::InstanceId as u8,
+                0x01,
+            )));
+
+        let request = MessageRouterRequest {
+            service: 0x4E, // forward open
+            epath,
+            data: cip::common::Serializable::serialize(&ForwardCloseRequest {
+                priority: 0x0A,
+                timeout_ticks: 0x05,
+                connection_serial_number: 0x0427, // It should be unique for each connection
+                original_vendor_id: 0x1009,       // Vendor ID of the client? Labitude
+                original_serial_number: 241216,   // PLC serial number
+                // transport_class: 0xA3,
+                connection_path: forward_open_epath,
+            }),
+        };
+
+        let data_frame = cip::common::Serializable::serialize(&request);
+        self.send_unconnected(data_frame).await;
+        println!("forward close sent");
     }
 }

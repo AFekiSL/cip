@@ -1,13 +1,13 @@
 use alloc::{boxed::Box, vec::Vec};
 use async_trait::async_trait;
-use nom::{bytes::complete::take, sequence::tuple, InputTake};
+use nom::{bytes::complete::take, number::complete::le_u16, sequence::tuple, InputTake};
 
 use crate::{
     common::Serializable,
     objects::{connection_manager::UnconnectedSendRequest, message_router::MessageRouter},
 };
 
-pub trait EpathSegments: Serializable {
+pub trait EpathSegments: Serializable + Send {
     fn get_type(&self) -> u8;
     fn get_data(&self) -> Vec<u8>;
 }
@@ -351,12 +351,26 @@ impl Serializable for MessageRouterResponse {
     where
         Self: Sized,
     {
-        let (input, (raw_service, raw_reserved, raw_general_status, raw_size_of_additional_status)) =
-            tuple((take(1u8), take(1u8), take(1u8), take(1u8)))(input)?;
+        let (
+            mut input,
+            (raw_service, raw_reserved, raw_general_status, raw_size_of_additional_status),
+        ) = tuple((take(1u8), take(1u8), take(1u8), take(1u8)))(input)?;
         let service = raw_service[0].into();
         let reserved = raw_reserved[0].into();
         let general_status = raw_general_status[0].into();
         let size_of_additional_status = raw_size_of_additional_status[0].into();
+
+        let mut additional_status = Vec::new();
+
+        if size_of_additional_status != 0 {
+            println!("additional status size: {} != 0", size_of_additional_status);
+            for i in 0..size_of_additional_status {
+                let (remaining_data, partial_additional_status) = le_u16(input)?;
+                input = remaining_data;
+                additional_status.push(partial_additional_status);
+            }
+        }
+        println!("final data: {:X?}", input);
 
         return Ok((
             &input,
@@ -389,6 +403,8 @@ pub trait Client: Send {
     async fn read_data(&mut self) -> DataResult;
     async fn send_nop(&mut self);
     async fn close_session(&mut self);
+    async fn forward_open(&mut self);
+    async fn forward_close(&mut self);
 }
 
 pub struct CipClient {
@@ -410,12 +426,24 @@ impl CipClient {
         self.client.send_unconnected(packet).await;
     }
 
+    pub async fn send_connected(&mut self, packet: Vec<u8>) {
+        self.client.send_connected(packet).await;
+    }
+
     pub async fn read_data(&mut self) -> DataResult {
         self.client.read_data().await
     }
 
     pub async fn disconnect(&mut self) {
         self.client.close_session().await;
+    }
+
+    pub async fn forward_open(&mut self) {
+        self.client.forward_open().await;
+    }
+
+    pub async fn forward_close(&mut self) {
+        self.client.forward_close().await;
     }
 
     pub async fn call_service(

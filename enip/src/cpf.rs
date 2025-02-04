@@ -59,12 +59,14 @@ impl CommonPacketList {
 impl Serializable for CommonPacketList {
     fn deserialize(input: &[u8]) -> IResult<&[u8], CommonPacketList> {
         let item_count_split = le_u16(input)?;
+        println!("item count: {}", item_count_split.1);
 
         let mut remaining_data = item_count_split.0;
         let mut items = CommonPacketList::new();
         for _ in 0..item_count_split.1 {
             let item_type = le_u16(remaining_data)?;
             let item_length = le_u16(item_type.0)?;
+            println!("item type {} item length {}", item_type.1, item_length.1);
 
             if item_length.0.len() < item_length.1.into() {
                 panic!("Not enough data to create Common Packet Item!")
@@ -72,22 +74,26 @@ impl Serializable for CommonPacketList {
 
             match item_type.1 {
                 0 => {
+                    println!("NullAddressItem");
                     let result: (&[u8], CommonPacketHeader) =
                         NullAddressItem::deserialize(remaining_data)?;
                     items.null_address_item.push(result.1);
                     remaining_data = result.0;
                 }
                 0xB2 => {
+                    println!("Unconnected Data Item");
                     let result = UnconnectedDataItem::deserialize(remaining_data)?;
                     items.unconnected_data_item.push(result.1);
                     remaining_data = result.0;
                 }
                 0xA1 => {
+                    println!("Connected Address Item");
                     let result = ConnectedAddressItem::deserialize(remaining_data)?;
                     items.connected_addr_item.push(result.1);
                     remaining_data = result.0;
                 }
                 0xB1 => {
+                    println!("Connected Data Item");
                     let result = ConnectedDataItem::deserialize(remaining_data)?;
                     items.connected_data_item.push(result.1);
                     remaining_data = result.0;
@@ -96,15 +102,16 @@ impl Serializable for CommonPacketList {
             }
         }
 
-        return Ok((
-            input,
-            CommonPacketList {
-                connected_addr_item: Vec::new(),
-                null_address_item: Vec::new(),
-                unconnected_data_item: Vec::new(),
-                connected_data_item: Vec::new(),
-            },
-        ));
+        // return Ok((
+        //     input,
+        //     CommonPacketList {
+        //         connected_addr_item: Vec::new(),
+        //         null_address_item: Vec::new(),
+        //         unconnected_data_item: Vec::new(),
+        //         connected_data_item: Vec::new(),
+        //     },
+        // ));
+        return Ok((remaining_data, items));
     }
 
     fn serialize(&self) -> Vec<u8> {
