@@ -397,7 +397,7 @@ pub struct DataResult {
 }
 
 #[async_trait]
-pub trait Client: Send {
+pub trait Client: Send + Sync {
     async fn begin_session(&mut self);
     async fn send_unconnected(&mut self, packet: Vec<u8>);
     async fn send_connected(&mut self, packet: Vec<u8>);
