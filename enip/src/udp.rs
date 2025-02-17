@@ -1,7 +1,7 @@
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use async_trait::async_trait;
-use cip::cip::{Client, DataResult};
+use cip::cip::{CipResult, Client, DataResult};
 use tokio::{
     io::{self, Interest},
     net::UdpSocket,
@@ -68,15 +68,15 @@ impl UdpENIPClient {
 
 #[async_trait]
 impl Client for UdpENIPClient {
-    async fn begin_session(&mut self) {
-        return;
+    async fn begin_session(&mut self) -> CipResult<()> {
+        Ok(())
     }
 
-    async fn close_session(&mut self) {
-        return;
+    async fn close_session(&mut self) -> CipResult<()> {
+        Ok(())
     }
 
-    async fn send_unconnected(&mut self, packet: Vec<u8>) {
+    async fn send_unconnected(&mut self, packet: Vec<u8>) -> CipResult<()> {
         let header = EtherNetIPHeader {
             command: 0x6F,
             session_handle: 0,
@@ -104,9 +104,10 @@ impl Client for UdpENIPClient {
             items: list,
         };
         self.send_packet(packet.serialize()).await;
+        Ok(())
     }
 
-    async fn send_connected(&mut self, packet: Vec<u8>) {
+    async fn send_connected(&mut self, packet: Vec<u8>) -> CipResult<()> {
         let header = EtherNetIPHeader {
             command: 0x70,
             session_handle: 0,
@@ -137,9 +138,10 @@ impl Client for UdpENIPClient {
             items: list,
         };
         self.send_packet(packet.serialize()).await;
+        Ok(())
     }
 
-    async fn send_nop(&mut self) {
+    async fn send_nop(&mut self) -> CipResult<()> {
         let header = EtherNetIPHeader {
             command: 0x00,
             session_handle: self.connection_id,
@@ -153,9 +155,10 @@ impl Client for UdpENIPClient {
             data: Vec::new(),
         };
         self.send_packet(packet.serialize()).await;
+        Ok(())
     }
 
-    async fn read_data(&mut self) -> DataResult {
+    async fn read_data(&mut self) -> CipResult<DataResult> {
         let result = self.read_packet().await;
         let enip = EtherNetIPHeader::deserialize(&result).unwrap();
         let mut data = Vec::new();
@@ -174,16 +177,16 @@ impl Client for UdpENIPClient {
             }
         }
 
-        return DataResult {
+        return Ok(DataResult {
             status: enip.1.status,
             data,
-        };
+        });
     }
 
-    async fn forward_open(&mut self) {
+    async fn forward_open(&mut self) -> CipResult<()> {
         todo!()
     }
-    async fn forward_close(&mut self) {
+    async fn forward_close(&mut self) -> CipResult<()> {
         todo!()
     }
 }

@@ -14,8 +14,8 @@ use alloc::vec::Vec;
 use async_trait::async_trait;
 use cip::{
     cip::{
-        CipClass, Client, DataResult, EPath, LogicalSegment, LogicalType, MessageRouterRequest,
-        MessageRouterResponse,
+        CipClass, CipError, CipResult, Client, DataResult, EPath, LogicalSegment, LogicalType,
+        MessageRouterRequest, MessageRouterResponse,
     },
     objects::connection_manager::{ForwardCloseRequest, ForwardOpenRequest},
 };
@@ -87,7 +87,7 @@ const TO_NETWORK_CONNECTION_ID: u32 = 0x71190427;
 
 #[async_trait]
 impl Client for TcpEnipClient {
-    async fn begin_session(&mut self) {
+    async fn begin_session(&mut self) -> CipResult<()> {
         let header = RegisterSession {
             header: EtherNetIPHeader {
                 command: 0x0065,
@@ -102,12 +102,13 @@ impl Client for TcpEnipClient {
         };
         let _ = self.send_packet(header.serialize()).await;
         let buf = self.read_packet().await;
-        let reply = RegisterSession::deserialize(&buf).unwrap();
+        let reply = RegisterSession::deserialize(&buf).map_err(|_| CipError::DeserializeError)?;
 
         self.session_handle = reply.1.header.session_handle;
+        Ok(())
     }
 
-    async fn close_session(&mut self) {
+    async fn close_session(&mut self) -> CipResult<()> {
         let unreg = UnregisterSession {
             command: 0x0066,
             length: 0,
@@ -118,9 +119,11 @@ impl Client for TcpEnipClient {
         };
         let _ = self.send_packet(unreg.serialize());
         let _ = self.tcp.shutdown().await;
+
+        Ok(())
     }
 
-    async fn send_unconnected(&mut self, packet: Vec<u8>) {
+    async fn send_unconnected(&mut self, packet: Vec<u8>) -> CipResult<()> {
         let header = EtherNetIPHeader {
             command: 0x6F,
             session_handle: self.session_handle,
@@ -148,9 +151,11 @@ impl Client for TcpEnipClient {
             items: list,
         };
         self.send_packet(packet.serialize()).await;
+
+        Ok(())
     }
 
-    async fn send_connected(&mut self, packet: Vec<u8>) {
+    async fn send_connected(&mut self, packet: Vec<u8>) -> CipResult<()> {
         let header = EtherNetIPHeader {
             command: 0x70,
             session_handle: self.session_handle,
@@ -181,9 +186,10 @@ impl Client for TcpEnipClient {
             items: list,
         };
         self.send_packet(packet.serialize()).await;
+        Ok(())
     }
 
-    async fn send_nop(&mut self) {
+    async fn send_nop(&mut self) -> CipResult<()> {
         let header = EtherNetIPHeader {
             command: 0x00,
             session_handle: self.connection_id,
@@ -197,20 +203,16 @@ impl Client for TcpEnipClient {
             data: Vec::new(),
         };
         self.send_packet(packet.serialize()).await;
+        Ok(())
     }
 
-    async fn read_data(&mut self) -> DataResult {
+    async fn read_data(&mut self) -> CipResult<DataResult> {
         let result = self.read_packet().await;
         let (_, enip) = EtherNetIPHeader::deserialize(&result).unwrap();
-        // let mut data = Vec::new();
 
-        let rrdata = if enip.command == 0x006F {
+        let data = if enip.command == 0x006F {
             println!("SendRRData deserialize");
             SendRRData::deserialize(&result).unwrap().0
-            // println!("final data: {:X?}", rrdata.0);
-            // for item in rrdata.1.items.unconnected_data_item {
-            //     data.extend_from_slice(&item.data);
-            // }
         } else if enip.command == 0x0070 {
             println!("SendUnitData deserialize");
             SendUnitData::deserialize(&result).unwrap().0
@@ -218,13 +220,13 @@ impl Client for TcpEnipClient {
             panic!("Other data need to be deserialized");
         };
 
-        return DataResult {
+        return Ok(DataResult {
             status: enip.status,
-            data: rrdata.to_vec(),
-        };
+            data: data.to_vec(),
+        });
     }
 
-    async fn forward_open(&mut self) {
+    async fn forward_open(&mut self) -> CipResult<()> {
         let mut epath = EPath::new();
         let connection_manager_class = LogicalSegment::init(
             LogicalType::ClassId as u8,
@@ -279,7 +281,7 @@ impl Client for TcpEnipClient {
         self.send_unconnected(data_frame).await;
         println!("forward open sent");
 
-        let data_result = self.read_data().await;
+        let data_result = self.read_data().await?;
 
         // data_result.data contains here the CIP & CIP Classe Generic (Command Specific Data)
         let (data, cip) =
@@ -303,9 +305,10 @@ impl Client for TcpEnipClient {
         }
 
         println!("Forward Open Successful");
+        Ok(())
     }
 
-    async fn forward_close(&mut self) {
+    async fn forward_close(&mut self) -> CipResult<()> {
         let mut epath = EPath::new();
         let connection_manager_class = LogicalSegment::init(
             LogicalType::ClassId as u8,
@@ -346,7 +349,7 @@ impl Client for TcpEnipClient {
         self.send_unconnected(data_frame).await;
         println!("forward close sent");
 
-        let data_result = self.read_data().await;
+        let data_result = self.read_data().await?;
         let (data, cip) =
             <MessageRouterResponse as cip::common::Serializable>::deserialize(&data_result.data)
                 .unwrap();
@@ -354,6 +357,7 @@ impl Client for TcpEnipClient {
         if cip.general_status != 0 {
             panic!("forward close fails")
         }
-        println!("forward close data: {:X?}", data)
+        println!("forward close data: {:X?}", data);
+        Ok(())
     }
 }
