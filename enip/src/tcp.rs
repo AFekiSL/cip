@@ -46,7 +46,7 @@ impl TcpEnipClient {
     }
 
     pub async fn send_packet(&mut self, packet: Vec<u8>) -> CipResult<()> {
-        println!("send packet: {:?} length: {}", packet, packet.len());
+        tracing::debug!("send packet: {:?} length: {}", packet, packet.len());
         let ready = self
             .tcp
             .ready(Interest::WRITABLE)
@@ -81,7 +81,7 @@ impl TcpEnipClient {
             for i in 0..n {
                 local[i] = data[i]
             }
-            println!("read_packet: {:?}", local);
+            tracing::debug!("read_packet: {:?}", local);
             return Ok(local);
         }
 
@@ -219,10 +219,10 @@ impl Client for TcpEnipClient {
         let (_, enip) = EtherNetIPHeader::deserialize(&result)?;
 
         let data = if enip.command == 0x006F {
-            println!("SendRRData deserialize");
+            tracing::debug!("SendRRData deserialize");
             SendRRData::deserialize(&result)?.0
         } else if enip.command == 0x0070 {
-            println!("SendUnitData deserialize");
+            tracing::debug!("SendUnitData deserialize");
             SendUnitData::deserialize(&result)?.0
         } else {
             return Err(CipError::Logic(
@@ -289,7 +289,7 @@ impl Client for TcpEnipClient {
 
         let data_frame = cip::common::Serializable::serialize(&request)?;
         self.send_unconnected(data_frame).await?;
-        println!("forward open sent");
+        tracing::debug!("forward open sent");
 
         let data_result = self.read_data().await?;
 
@@ -298,7 +298,7 @@ impl Client for TcpEnipClient {
             <MessageRouterResponse as cip::common::Serializable>::deserialize(&data_result.data)?;
 
         if cip.general_status != 0 {
-            println!("Forward open fails");
+            tracing::debug!("Forward open fails");
             return Err(CipError::GeneralStatusError);
         }
 
@@ -307,7 +307,7 @@ impl Client for TcpEnipClient {
         let (data, ot_network_connection_id) = le_u32::<&[u8], ()>(data).map_err(|_| {
             CipError::Logic("Error extracting OT network connection ID".to_string())
         })?;
-        println!("connection id: {}", ot_network_connection_id);
+        tracing::debug!("connection id: {}", ot_network_connection_id);
         self.connection_id = ot_network_connection_id;
 
         // the we get the to_network_connection_id
@@ -316,11 +316,11 @@ impl Client for TcpEnipClient {
                 CipError::Logic("Error extracting TO network connection ID".to_string())
             })?;
         if to_network_connection_id != TO_NETWORK_CONNECTION_ID {
-            println!("to_network_connection_id != 0x71190427");
+            tracing::debug!("to_network_connection_id != 0x71190427");
             return Err(CipError::WrongNetworkConnectionId);
         }
 
-        println!("Forward Open Successful");
+        tracing::debug!("Forward Open Successful");
         Ok(())
     }
 
@@ -363,17 +363,17 @@ impl Client for TcpEnipClient {
 
         let data_frame = cip::common::Serializable::serialize(&request)?;
         self.send_unconnected(data_frame).await?;
-        println!("forward close sent");
+        tracing::debug!("forward close sent");
 
         let data_result = self.read_data().await?;
         let (data, cip) =
             <MessageRouterResponse as cip::common::Serializable>::deserialize(&data_result.data)?;
 
         if cip.general_status != 0 {
-            println!("forward close fails");
+            tracing::debug!("forward close fails");
             return Err(CipError::GeneralStatusError);
         }
-        println!("forward close data: {:X?}", data);
+        tracing::debug!("forward close data: {:X?}", data);
         Ok(())
     }
 }

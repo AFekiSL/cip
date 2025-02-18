@@ -380,7 +380,7 @@ impl Serializable for MessageRouterResponse {
 
         // additional status need to be treated if the exist
         if size_of_additional_status != 0 {
-            println!("additional status size: {} != 0", size_of_additional_status);
+            tracing::debug!("additional status size: {} != 0", size_of_additional_status);
             for _ in 0..size_of_additional_status {
                 let (remaining_data, partial_additional_status) =
                     le_u16::<&[u8], Error<&[u8]>>(input)
@@ -658,7 +658,7 @@ impl CipClient {
         let data = self.client.read_data().await?;
 
         let result = MessageRouterResponse::deserialize(&data.data)?;
-        println!("final data: {:X?}", result.1.data);
+        tracing::debug!("final data: {:X?}", result.1.data);
         return Ok(result.1);
     }
 

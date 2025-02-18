@@ -16,6 +16,7 @@ strum = "0.26.3"
 strum_macros = "0.26.4"
 talc = { version = "4.4.1", default-features = false, features = ["lock_api"] }
 trait-variant = "0.1.2"
+tracing = {workspace = true}
 
 [unstable]
 build-std = ["core", "alloc"]

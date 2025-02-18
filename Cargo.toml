@@ -7,3 +7,5 @@ members = [
 
 [workspace.dependencies]
 cip = { path = "cip" }
+tracing = "0.1.40"
+tracing-subscriber = { version="0.3.18", features = ["env-filter"] }

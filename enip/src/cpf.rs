@@ -63,7 +63,7 @@ impl Serializable for CommonPacketList {
     fn deserialize(input: &[u8]) -> CipResult<(&[u8], CommonPacketList)> {
         let item_count_split =
             le_u16::<&[u8], Error<&[u8]>>(input).map_err(|e| CipError::Other(e.to_string()))?;
-        println!("item count: {}", item_count_split.1);
+        tracing::debug!("item count: {}", item_count_split.1);
 
         let mut remaining_data = item_count_split.0;
         let mut items = CommonPacketList::new();
@@ -72,7 +72,7 @@ impl Serializable for CommonPacketList {
                 .map_err(|e| CipError::Other(e.to_string()))?;
             let item_length = le_u16::<&[u8], Error<&[u8]>>(item_type.0)
                 .map_err(|e| CipError::Other(e.to_string()))?;
-            println!("item type {} item length {}", item_type.1, item_length.1);
+            tracing::debug!("item type {} item length {}", item_type.1, item_length.1);
 
             if item_length.0.len() < item_length.1.into() {
                 return Err(CipError::Other(
@@ -82,26 +82,26 @@ impl Serializable for CommonPacketList {
 
             match item_type.1 {
                 0 => {
-                    println!("NullAddressItem");
+                    tracing::debug!("NullAddressItem");
                     let result: (&[u8], CommonPacketHeader) =
                         NullAddressItem::deserialize(remaining_data)?;
                     items.null_address_item.push(result.1);
                     remaining_data = result.0;
                 }
                 0xB2 => {
-                    println!("Unconnected Data Item");
+                    tracing::debug!("Unconnected Data Item");
                     let result = UnconnectedDataItem::deserialize(remaining_data)?;
                     items.unconnected_data_item.push(result.1);
                     remaining_data = result.0;
                 }
                 0xA1 => {
-                    println!("Connected Address Item");
+                    tracing::debug!("Connected Address Item");
                     let result = ConnectedAddressItem::deserialize(remaining_data)?;
                     items.connected_addr_item.push(result.1);
                     remaining_data = result.0;
                 }
                 0xB1 => {
-                    println!("Connected Data Item");
+                    tracing::debug!("Connected Data Item");
                     let result = ConnectedDataItem::deserialize(remaining_data)?;
                     items.connected_data_item.push(result.1);
                     remaining_data = result.0;
