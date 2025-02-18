@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 use rand::Rng;
 
 use crate::{
-    cip::{EPath, MessageRouterRequest},
+    cip::{CipError, CipResult, EPath, MessageRouterRequest},
     common::Serializable,
 };
 
@@ -24,14 +24,16 @@ pub struct ForwardOpenRequest {
 }
 
 impl Serializable for ForwardOpenRequest {
-    fn deserialize(input: &[u8]) -> nom::IResult<&[u8], Self>
+    fn deserialize(_: &[u8]) -> CipResult<(&[u8], ForwardOpenRequest)>
     where
         Self: Sized,
     {
-        todo!()
+        Err(CipError::Other(
+            "Unable to deserialize ForwardOpenRequest".to_string(),
+        ))
     }
 
-    fn serialize(&self) -> Vec<u8> {
+    fn serialize(&self) -> CipResult<Vec<u8>> {
         let mut vec = Vec::new();
         vec.push(self.priority);
         vec.push(self.timeout_ticks);
@@ -53,16 +55,18 @@ impl Serializable for ForwardOpenRequest {
         let mut segments = Vec::new();
 
         for segement in &self.connection_path.attributes {
-            segments.extend(segement.as_ref().serialize());
+            segments.extend(segement.as_ref().serialize()?);
         }
 
         if segments.len() % 2 != 0 {
-            panic!("Segments are not padded to 16-bit values!");
+            return Err(CipError::Logic(
+                "Segments are not padded to 16-bit values!".to_string(),
+            ));
         }
         vec.push((segments.len() / 2) as u8);
         vec.extend(segments);
 
-        return vec;
+        return Ok(vec);
     }
 }
 
@@ -101,14 +105,16 @@ pub struct ForwardCloseRequest {
 }
 
 impl Serializable for ForwardCloseRequest {
-    fn deserialize(input: &[u8]) -> nom::IResult<&[u8], Self>
+    fn deserialize(_: &[u8]) -> CipResult<(&[u8], Self)>
     where
         Self: Sized,
     {
-        todo!()
+        return Err(CipError::Other(
+            "Unable to deserialize ForwardCloseRequest".to_string(),
+        ));
     }
 
-    fn serialize(&self) -> Vec<u8> {
+    fn serialize(&self) -> CipResult<Vec<u8>> {
         let mut vec = Vec::new();
         vec.push(self.priority);
         vec.push(self.timeout_ticks);
@@ -122,17 +128,19 @@ impl Serializable for ForwardCloseRequest {
         let mut segments = Vec::new();
 
         for segement in &self.connection_path.attributes {
-            segments.extend(segement.as_ref().serialize());
+            segments.extend(segement.as_ref().serialize()?);
         }
 
         if segments.len() % 2 != 0 {
-            panic!("Segments are not padded to 16-bit values!");
+            return Err(CipError::Logic(
+                "Segments are not padded to 16-bit values!".to_string(),
+            ));
         }
         vec.push((segments.len() / 2) as u8);
         vec.push(0);
         vec.extend(segments);
 
-        return vec;
+        return Ok(vec);
     }
 }
 
@@ -144,18 +152,20 @@ pub struct UnconnectedSendRequest {
 }
 
 impl Serializable for UnconnectedSendRequest {
-    fn deserialize(input: &[u8]) -> nom::IResult<&[u8], Self>
+    fn deserialize(_: &[u8]) -> CipResult<(&[u8], Self)>
     where
         Self: Sized,
     {
-        todo!()
+        Err(CipError::Other(
+            "Unable to deserilize UnconnectedSendRequest".to_string(),
+        ))
     }
 
-    fn serialize(&self) -> Vec<u8> {
+    fn serialize(&self) -> CipResult<Vec<u8>> {
         let mut vec = Vec::new();
         vec.push(self.priority);
         vec.push(self.timeout_ticks);
-        let embedded_message_request = self.message_request.serialize();
+        let embedded_message_request = self.message_request.serialize()?;
         let length: u16 = embedded_message_request.len() as u16;
         vec.extend_from_slice(&length.to_le_bytes());
         vec.extend(embedded_message_request);
@@ -166,16 +176,18 @@ impl Serializable for UnconnectedSendRequest {
         let mut segments = Vec::new();
 
         for segement in &self.route_path.attributes {
-            segments.extend(segement.as_ref().serialize());
+            segments.extend(segement.as_ref().serialize()?);
         }
 
         if segments.len() % 2 != 0 {
-            panic!("Segments are not padded to 16-bit values!");
+            return Err(CipError::Logic(
+                "Segments are not padded to 16-bit values!".to_string(),
+            ));
         }
         vec.push((segments.len() / 2) as u8);
         vec.push(0);
         vec.extend(segments);
 
-        return vec;
+        return Ok(vec);
     }
 }

@@ -1,6 +1,9 @@
 use alloc::{boxed::Box, vec::Vec};
 use async_trait::async_trait;
-use nom::{bytes::complete::take, number::complete::le_u16, sequence::tuple, InputTake};
+use nom::{
+    bytes::complete::take, error::Error, number::complete::le_u16, sequence::tuple, InputTake,
+};
+use strum_macros::Display;
 
 use crate::{
     common::Serializable,
@@ -9,8 +12,8 @@ use crate::{
 
 // needs to be Send in my case
 pub trait EpathSegments: Serializable + Send {
-    fn get_type(&self) -> u8;
-    fn get_data(&self) -> Vec<u8>;
+    fn get_type(&self) -> CipResult<u8>;
+    fn get_data(&self) -> CipResult<Vec<u8>>;
 }
 
 pub struct LogicalSegment {
@@ -28,19 +31,21 @@ impl LogicalSegment {
         }
     }
 
-    pub fn init(logical_type: u8, value: u32) -> Self {
+    pub fn init(logical_type: u8, value: u32) -> CipResult<Self> {
         let mut obj = Self {
             logical_format: 0,
             logical_type: 0,
             value: 0,
         };
-        obj.set_segment(logical_type, value);
-        return obj;
+        obj.set_segment(logical_type, value)?;
+        return Ok(obj);
     }
 
-    pub fn set_segment(&mut self, logical_type: u8, value: u32) {
+    pub fn set_segment(&mut self, logical_type: u8, value: u32) -> CipResult<()> {
         if logical_type > LogicalType::ExdendedLogical as u8 {
-            panic!("Cannot send logical type greater than 8")
+            return Err(CipError::Logic(
+                "Cannot send logical type greater than 8".to_string(),
+            ));
         }
 
         if value < 256 {
@@ -53,34 +58,36 @@ impl LogicalSegment {
 
         self.logical_type = logical_type;
         self.value = value;
+
+        Ok(())
     }
 }
 
 impl EpathSegments for LogicalSegment {
-    fn get_type(&self) -> u8 {
+    fn get_type(&self) -> CipResult<u8> {
         let mut result: u8 = 0;
         result = result | 0b00100000;
         result = result | (self.logical_type << 2);
         result = result | self.logical_format;
 
-        return result;
+        return Ok(result);
     }
 
-    fn get_data(&self) -> Vec<u8> {
+    fn get_data(&self) -> CipResult<Vec<u8>> {
         let mut result: Vec<u8> = Vec::new();
         match self.logical_format {
             0b00 => result.push(self.value as u8),
             0b01 => result.extend(u16::to_le_bytes(self.value as u16)),
             0b10 => result.extend(u32::to_le_bytes(self.value as u32)),
-            _ => panic!("Unknown logical format!"),
+            _ => return Err(CipError::Logic("Unknown logical format!".to_string())),
         }
 
-        return result;
+        return Ok(result);
     }
 }
 
 impl Serializable for LogicalSegment {
-    fn deserialize(input: &[u8]) -> nom::IResult<&[u8], Self>
+    fn deserialize(input: &[u8]) -> CipResult<(&[u8], Self)>
     where
         Self: Sized,
     {
@@ -106,16 +113,16 @@ impl Serializable for LogicalSegment {
         ));
     }
 
-    fn serialize(&self) -> Vec<u8> {
+    fn serialize(&self) -> CipResult<Vec<u8>> {
         let mut vec = Vec::new();
-        let data = self.get_data();
-        vec.push(self.get_type());
+        let data = self.get_data()?;
+        vec.push(self.get_type()?);
         if self.logical_format != LogicalFormat::EightBit as u8 {
             vec.push(0);
         }
         vec.extend(data);
 
-        return vec;
+        return Ok(vec);
     }
 }
 
@@ -126,28 +133,28 @@ pub struct PortSegment {
 }
 
 impl EpathSegments for PortSegment {
-    fn get_type(&self) -> u8 {
+    fn get_type(&self) -> CipResult<u8> {
         let mut result: u8 = 0;
         if self.extended_link_address {
-            result = result | 0b00010000;
-            panic!("Not supported!")
+            // result = result | 0b00010000;
+            return Err(CipError::Other("Not supported!".to_string()));
         }
         if self.port_identifier < 15 {
             result = result | self.port_identifier;
         } else {
-            todo!("Not supported!")
+            return Err(CipError::Other("Not supported!".to_string()));
         }
 
-        return result;
+        return Ok(result);
     }
 
-    fn get_data(&self) -> Vec<u8> {
-        return self.link_address.clone();
+    fn get_data(&self) -> CipResult<Vec<u8>> {
+        return Ok(self.link_address.clone());
     }
 }
 
 impl Serializable for PortSegment {
-    fn deserialize(input: &[u8]) -> nom::IResult<&[u8], Self>
+    fn deserialize(input: &[u8]) -> CipResult<(&[u8], Self)>
     where
         Self: Sized,
     {
@@ -167,12 +174,12 @@ impl Serializable for PortSegment {
         ));
     }
 
-    fn serialize(&self) -> Vec<u8> {
+    fn serialize(&self) -> CipResult<Vec<u8>> {
         let mut vec = Vec::new();
-        vec.push(self.get_type());
-        vec.extend(self.get_data());
+        vec.push(self.get_type()?);
+        vec.extend(self.get_data()?);
 
-        return vec;
+        return Ok(vec);
     }
 }
 
@@ -307,25 +314,27 @@ pub struct MessageRouterRequest {
 }
 
 impl Serializable for MessageRouterRequest {
-    fn deserialize(_input: &[u8]) -> nom::IResult<&[u8], Self>
+    fn deserialize(_input: &[u8]) -> CipResult<(&[u8], Self)>
     where
         Self: Sized,
     {
         todo!()
     }
 
-    fn serialize(&self) -> Vec<u8> {
+    fn serialize(&self) -> CipResult<Vec<u8>> {
         let mut result = Vec::new();
         let mut segments = Vec::new();
 
         result.push(self.service);
 
         for segement in &self.epath.attributes {
-            segments.extend(segement.as_ref().serialize());
+            segments.extend(segement.as_ref().serialize()?);
         }
 
         if segments.len() % 2 != 0 {
-            panic!("Segments are not padded to 16-bit values!");
+            return Err(CipError::Logic(
+                "Segments are not padded to 16-bit values!".to_string(),
+            ));
         }
         result.push((segments.len() / 2) as u8);
         result.extend(segments);
@@ -334,7 +343,7 @@ impl Serializable for MessageRouterRequest {
             result.extend(&self.data)
         }
 
-        return result;
+        return Ok(result);
     }
 }
 
@@ -348,14 +357,20 @@ pub struct MessageRouterResponse {
 }
 
 impl Serializable for MessageRouterResponse {
-    fn deserialize(input: &[u8]) -> nom::IResult<&[u8], Self>
+    fn deserialize(input: &[u8]) -> CipResult<(&[u8], Self)>
     where
         Self: Sized,
     {
         let (
             mut input,
             (raw_service, raw_reserved, raw_general_status, raw_size_of_additional_status),
-        ) = tuple((take(1u8), take(1u8), take(1u8), take(1u8)))(input)?;
+        ) = tuple((
+            take::<u8, &[u8], Error<&[u8]>>(1u8),
+            take(1u8),
+            take(1u8),
+            take(1u8),
+        ))(input)
+        .map_err(|e| CipError::Other(e.to_string()))?;
         let service = raw_service[0].into();
         let reserved = raw_reserved[0].into();
         let general_status = raw_general_status[0].into();
@@ -366,8 +381,10 @@ impl Serializable for MessageRouterResponse {
         // additional status need to be treated if the exist
         if size_of_additional_status != 0 {
             println!("additional status size: {} != 0", size_of_additional_status);
-            for i in 0..size_of_additional_status {
-                let (remaining_data, partial_additional_status) = le_u16(input)?;
+            for _ in 0..size_of_additional_status {
+                let (remaining_data, partial_additional_status) =
+                    le_u16::<&[u8], Error<&[u8]>>(input)
+                        .map_err(|e| CipError::Other(e.to_string()))?;
                 input = remaining_data;
                 additional_status.push(partial_additional_status);
             }
@@ -386,7 +403,7 @@ impl Serializable for MessageRouterResponse {
         ));
     }
 
-    fn serialize(&self) -> Vec<u8> {
+    fn serialize(&self) -> CipResult<Vec<u8>> {
         todo!()
     }
 }
@@ -396,10 +413,19 @@ pub struct DataResult {
     pub data: Vec<u8>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Display)]
 pub enum CipError {
     SerializeError,
     DeserializeError,
+    Logic(String),
+    NotReadable(String),
+    NotWritable,
+    NotReady(String),
+    ReadError(String),
+    SendError(String),
+    GeneralStatusError,
+    WrongNetworkConnectionId,
+    Other(String),
 }
 
 pub type CipResult<T> = Result<T, CipError>;
@@ -429,32 +455,32 @@ impl CipClient {
         }
     }
 
-    pub async fn connect(&mut self) {
-        self.client.begin_session().await;
+    pub async fn connect(&mut self) -> CipResult<()> {
+        self.client.begin_session().await
     }
 
-    pub async fn send_unconnected(&mut self, packet: Vec<u8>) {
-        self.client.send_unconnected(packet).await;
+    pub async fn send_unconnected(&mut self, packet: Vec<u8>) -> CipResult<()> {
+        self.client.send_unconnected(packet).await
     }
 
-    pub async fn send_connected(&mut self, packet: Vec<u8>) {
-        self.client.send_connected(packet).await;
+    pub async fn send_connected(&mut self, packet: Vec<u8>) -> CipResult<()> {
+        self.client.send_connected(packet).await
     }
 
-    pub async fn read_data(&mut self) -> DataResult {
-        self.client.read_data().await.unwrap()
+    pub async fn read_data(&mut self) -> CipResult<DataResult> {
+        self.client.read_data().await
     }
 
-    pub async fn disconnect(&mut self) {
-        self.client.close_session().await;
+    pub async fn disconnect(&mut self) -> CipResult<()> {
+        self.client.close_session().await
     }
 
-    pub async fn forward_open(&mut self) {
-        self.client.forward_open().await;
+    pub async fn forward_open(&mut self) -> CipResult<()> {
+        self.client.forward_open().await
     }
 
-    pub async fn forward_close(&mut self) {
-        self.client.forward_close().await;
+    pub async fn forward_close(&mut self) -> CipResult<()> {
+        self.client.forward_close().await
     }
 
     pub async fn call_service(
@@ -463,14 +489,14 @@ impl CipClient {
         instance_id: u32,
         service_num: u8,
         data: Vec<u8>,
-    ) -> MessageRouterResponse {
+    ) -> CipResult<MessageRouterResponse> {
         let mut class_segment = LogicalSegment::new();
         let mut instance_segment = LogicalSegment::new();
 
         let new_service_num = service_num; // & 0b01111111;
 
-        class_segment.set_segment(LogicalType::ClassId as u8, class_id);
-        instance_segment.set_segment(LogicalType::InstanceId as u8, instance_id);
+        class_segment.set_segment(LogicalType::ClassId as u8, class_id)?;
+        instance_segment.set_segment(LogicalType::InstanceId as u8, instance_id)?;
 
         let mut epath = EPath::new();
         epath.attributes.push(Box::new(class_segment));
@@ -482,15 +508,15 @@ impl CipClient {
             data,
         };
 
-        self.send_unconnected_cm(request).await;
+        self.send_unconnected_cm(request).await?;
 
-        let data = self.client.read_data().await.unwrap();
+        let data = self.client.read_data().await?;
 
-        let result = MessageRouterResponse::deserialize(&data.data).unwrap();
-        return result.1;
+        let result = MessageRouterResponse::deserialize(&data.data)?;
+        return Ok(result.1);
     }
 
-    pub async fn send_unconnected_cm(&mut self, request: MessageRouterRequest) {
+    pub async fn send_unconnected_cm(&mut self, request: MessageRouterRequest) -> CipResult<()> {
         let mut unconnected_send_epath = EPath::new();
         let mut port_segment = PortSegment::new();
         port_segment.set_address(alloc::vec![2]);
@@ -502,16 +528,17 @@ impl CipClient {
         let connection_manager_class = LogicalSegment::init(
             LogicalType::ClassId as u8,
             CipClass::ConnectionManager as u32,
-        );
-        let connection_manager_instance = LogicalSegment::init(LogicalType::InstanceId as u8, 0x1);
+        )?;
+        let connection_manager_instance = LogicalSegment::init(LogicalType::InstanceId as u8, 0x1)?;
         epath.attributes.push(Box::new(connection_manager_class));
         epath.attributes.push(Box::new(connection_manager_instance));
 
         let mut identity_class_segment = LogicalSegment::new();
         let mut identity_instance_segment = LogicalSegment::new();
 
-        identity_class_segment.set_segment(LogicalType::ClassId as u8, CipClass::Identity as u32);
-        identity_instance_segment.set_segment(LogicalType::InstanceId as u8, 1);
+        identity_class_segment
+            .set_segment(LogicalType::ClassId as u8, CipClass::Identity as u32)?;
+        identity_instance_segment.set_segment(LogicalType::InstanceId as u8, 1)?;
 
         let mut identity_epath = EPath::new();
         identity_epath
@@ -530,10 +557,12 @@ impl CipClient {
                 message_request: request,
                 route_path: unconnected_send_epath,
             }
-            .serialize(),
+            .serialize()?,
         };
 
-        self.client.send_unconnected(request.serialize()).await;
+        self.client.send_unconnected(request.serialize()?).await?;
+
+        Ok(())
     }
 
     pub async fn get_supported_classes(&mut self) -> CipResult<Vec<u16>> {
@@ -541,9 +570,9 @@ impl CipClient {
         let mut instance_segment = LogicalSegment::new();
         let mut attribute_segment = LogicalSegment::new();
 
-        class_segment.set_segment(LogicalType::ClassId as u8, CipClass::MessageRouter as u32);
-        instance_segment.set_segment(LogicalType::InstanceId as u8, 1);
-        attribute_segment.set_segment(LogicalType::AttributeId as u8, 1);
+        class_segment.set_segment(LogicalType::ClassId as u8, CipClass::MessageRouter as u32)?;
+        instance_segment.set_segment(LogicalType::InstanceId as u8, 1)?;
+        attribute_segment.set_segment(LogicalType::AttributeId as u8, 1)?;
 
         let mut epath = EPath::new();
         epath.attributes.push(Box::new(class_segment));
@@ -555,11 +584,11 @@ impl CipClient {
             epath,
             data: alloc::vec![],
         };
-        self.send_unconnected(request.serialize()).await;
+        self.send_unconnected(request.serialize()?).await?;
         let data = self.client.read_data().await?;
 
-        let response = MessageRouterResponse::deserialize(&data.data).unwrap();
-        let get_all_response = MessageRouter::deserialize(&response.1.data).unwrap();
+        let response = MessageRouterResponse::deserialize(&data.data)?;
+        let get_all_response = MessageRouter::deserialize(&response.1.data)?;
 
         return Ok(get_all_response.1.objects);
     }
@@ -574,9 +603,9 @@ impl CipClient {
         let mut instance_segment = LogicalSegment::new();
         let mut attribute_segment = LogicalSegment::new();
 
-        class_segment.set_segment(LogicalType::ClassId as u8, class_id);
-        instance_segment.set_segment(LogicalType::InstanceId as u8, instance_id);
-        attribute_segment.set_segment(LogicalType::AttributeId as u8, attribute_id);
+        class_segment.set_segment(LogicalType::ClassId as u8, class_id)?;
+        instance_segment.set_segment(LogicalType::InstanceId as u8, instance_id)?;
+        attribute_segment.set_segment(LogicalType::AttributeId as u8, attribute_id)?;
 
         let mut epath = EPath::new();
         epath.attributes.push(Box::new(class_segment));
@@ -588,10 +617,10 @@ impl CipClient {
             epath,
             data: alloc::vec![],
         };
-        self.send_unconnected_cm(request).await;
+        self.send_unconnected_cm(request).await?;
         let data = self.client.read_data().await?;
 
-        let result = MessageRouterResponse::deserialize(&data.data).unwrap();
+        let result = MessageRouterResponse::deserialize(&data.data)?;
         return Ok(result.1);
     }
 
@@ -606,9 +635,9 @@ impl CipClient {
         let mut instance_segment = LogicalSegment::new();
         let mut attribute_segment = LogicalSegment::new();
 
-        class_segment.set_segment(LogicalType::ClassId as u8, class_id);
-        instance_segment.set_segment(LogicalType::InstanceId as u8, instance_id);
-        attribute_segment.set_segment(LogicalType::AttributeId as u8, attribute_id);
+        class_segment.set_segment(LogicalType::ClassId as u8, class_id)?;
+        instance_segment.set_segment(LogicalType::InstanceId as u8, instance_id)?;
+        attribute_segment.set_segment(LogicalType::AttributeId as u8, attribute_id)?;
 
         let mut epath = EPath::new();
         epath.attributes.push(Box::new(class_segment));
@@ -622,18 +651,18 @@ impl CipClient {
         };
         self.cip_sequence_counter += 1;
         let mut serialized_request = vec![self.cip_sequence_counter, 0x00];
-        for item in request.serialize() {
+        for item in request.serialize()? {
             serialized_request.push(item);
         }
-        self.send_connected(serialized_request).await;
+        self.send_connected(serialized_request).await?;
         let data = self.client.read_data().await?;
 
-        let result = MessageRouterResponse::deserialize(&data.data).unwrap();
+        let result = MessageRouterResponse::deserialize(&data.data)?;
         println!("final data: {:X?}", result.1.data);
         return Ok(result.1);
     }
 
-    pub async fn send_nop(&mut self) {
-        self.client.send_nop().await;
+    pub async fn send_nop(&mut self) -> CipResult<()> {
+        self.client.send_nop().await
     }
 }

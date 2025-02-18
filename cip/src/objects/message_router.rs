@@ -1,31 +1,39 @@
 use alloc::vec::Vec;
-use nom::number::complete::le_u16;
+use nom::{error::Error, number::complete::le_u16};
 use strum_macros::EnumIter;
 
-use crate::common::Serializable;
+use crate::{
+    cip::{CipError, CipResult},
+    common::Serializable,
+};
 
 pub struct MessageRouter {
-    pub objects: Vec<u16>
+    pub objects: Vec<u16>,
 }
 
 impl Serializable for MessageRouter {
-    fn deserialize(input: &[u8]) -> nom::IResult<&[u8], Self> where Self: Sized {
-        let (input, number_objects) = le_u16(input)?;
+    fn deserialize(input: &[u8]) -> CipResult<(&[u8], MessageRouter)>
+    where
+        Self: Sized,
+    {
+        let (input, number_objects) =
+            le_u16::<&[u8], Error<&[u8]>>(input).map_err(|e| CipError::Other(e.to_string()))?;
         let mut objects = Vec::new();
 
         let mut remaining_input = input;
         if number_objects > 0 {
             for _ in 0..number_objects {
-                let (input, object_num) = le_u16(remaining_input)?;
+                let (input, object_num) = le_u16::<&[u8], Error<&[u8]>>(remaining_input)
+                    .map_err(|e| CipError::Other(e.to_string()))?;
                 remaining_input = input;
                 objects.push(object_num)
             }
         }
         objects.sort();
-        return Ok((remaining_input, MessageRouter { objects }))
+        return Ok((remaining_input, MessageRouter { objects }));
     }
 
-    fn serialize(&self) -> Vec<u8> {
+    fn serialize(&self) -> CipResult<Vec<u8>> {
         todo!()
     }
 }
@@ -80,5 +88,5 @@ pub enum MessageRouterResponseStatusCodes {
     ModbusError = 0x2B,
     AttributeNotGetable = 0x2C,
     InstanceNotDeletable = 0x2D,
-    ServiceNotSupportedForPath = 0x2E
+    ServiceNotSupportedForPath = 0x2E,
 }

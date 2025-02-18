@@ -1,9 +1,11 @@
 use alloc::vec::Vec;
+use cip::cip::{CipError, CipResult};
 use nom::{
     bytes::streaming::take,
+    error::Error,
     number::complete::{be_u32, le_u16, le_u32},
     sequence::tuple,
-    IResult, InputTake,
+    InputTake,
 };
 
 use crate::common::Serializable;
@@ -14,8 +16,9 @@ pub struct CommonPacketHeader {
 }
 
 impl Serializable for CommonPacketHeader {
-    fn deserialize(input: &[u8]) -> IResult<&[u8], CommonPacketHeader> {
-        let (input, (type_id, length)) = tuple((le_u16, le_u16))(input)?;
+    fn deserialize(input: &[u8]) -> CipResult<(&[u8], CommonPacketHeader)> {
+        let (input, (type_id, length)) = tuple((le_u16::<&[u8], Error<&[u8]>>, le_u16))(input)
+            .map_err(|e| CipError::Other(e.to_string()))?;
 
         return Ok((input, CommonPacketHeader { type_id, length }));
     }
@@ -57,19 +60,24 @@ impl CommonPacketList {
 }
 
 impl Serializable for CommonPacketList {
-    fn deserialize(input: &[u8]) -> IResult<&[u8], CommonPacketList> {
-        let item_count_split = le_u16(input)?;
+    fn deserialize(input: &[u8]) -> CipResult<(&[u8], CommonPacketList)> {
+        let item_count_split =
+            le_u16::<&[u8], Error<&[u8]>>(input).map_err(|e| CipError::Other(e.to_string()))?;
         println!("item count: {}", item_count_split.1);
 
         let mut remaining_data = item_count_split.0;
         let mut items = CommonPacketList::new();
         for _ in 0..item_count_split.1 {
-            let item_type = le_u16(remaining_data)?;
-            let item_length = le_u16(item_type.0)?;
+            let item_type = le_u16::<&[u8], Error<&[u8]>>(remaining_data)
+                .map_err(|e| CipError::Other(e.to_string()))?;
+            let item_length = le_u16::<&[u8], Error<&[u8]>>(item_type.0)
+                .map_err(|e| CipError::Other(e.to_string()))?;
             println!("item type {} item length {}", item_type.1, item_length.1);
 
             if item_length.0.len() < item_length.1.into() {
-                panic!("Not enough data to create Common Packet Item!")
+                return Err(CipError::Other(
+                    "Not enough data to create Common Packet Item!".to_string(),
+                ));
             }
 
             match item_type.1 {
@@ -98,7 +106,7 @@ impl Serializable for CommonPacketList {
                     items.connected_data_item.push(result.1);
                     remaining_data = result.0;
                 }
-                _ => panic!("Unknown Common Packet Item"),
+                _ => return Err(CipError::Other("Unknown Common Packet Item".to_string())),
             }
         }
 
@@ -148,9 +156,17 @@ pub struct SockAddrInfo {
 }
 
 impl Serializable for SockAddrInfo {
-    fn deserialize(input: &[u8]) -> IResult<&[u8], SockAddrInfo> {
+    fn deserialize(input: &[u8]) -> CipResult<(&[u8], SockAddrInfo)> {
         let (input, (type_id, length, sin_family, sin_port, sin_addr, sin_zero_context)) =
-            tuple((le_u16, le_u16, be_u32, le_u16, le_u32, take(8u8)))(input)?;
+            tuple((
+                le_u16::<&[u8], Error<&[u8]>>,
+                le_u16,
+                be_u32,
+                le_u16,
+                le_u32,
+                take(8u8),
+            ))(input)
+            .map_err(|e| CipError::Other(e.to_string()))?;
         let sin_zero = sin_zero_context
             .try_into()
             .expect("slice with incorrect length");
@@ -189,11 +205,12 @@ pub struct ConnectedDataItem {
 }
 
 impl Serializable for ConnectedDataItem {
-    fn deserialize(input: &[u8]) -> IResult<&[u8], Self>
+    fn deserialize(input: &[u8]) -> CipResult<(&[u8], Self)>
     where
         Self: Sized,
     {
-        let (input, (type_id, length)) = tuple((le_u16, le_u16))(input)?;
+        let (input, (type_id, length)) = tuple((le_u16::<&[u8], Error<&[u8]>>, le_u16))(input)
+            .map_err(|e| CipError::Other(e.to_string()))?;
         let data = input.take(length.into()).to_vec();
 
         // TODO: Fix input as it still has "data" field when we return
@@ -225,11 +242,12 @@ pub struct UnconnectedDataItem {
 }
 
 impl Serializable for UnconnectedDataItem {
-    fn deserialize(input: &[u8]) -> IResult<&[u8], Self>
+    fn deserialize(input: &[u8]) -> CipResult<(&[u8], Self)>
     where
         Self: Sized,
     {
-        let (input, (type_id, length)) = tuple((le_u16, le_u16))(input)?;
+        let (input, (type_id, length)) = tuple((le_u16::<&[u8], Error<&[u8]>>, le_u16))(input)
+            .map_err(|e| CipError::Other(e.to_string()))?;
         let data = input.take(length.into()).to_vec();
 
         // TODO: Fix input as it still has "data" field when we return
@@ -261,11 +279,13 @@ pub struct ConnectedAddressItem {
 }
 
 impl Serializable for ConnectedAddressItem {
-    fn deserialize(input: &[u8]) -> IResult<&[u8], Self>
+    fn deserialize(input: &[u8]) -> CipResult<(&[u8], Self)>
     where
         Self: Sized,
     {
-        let (input, (type_id, length, addr)) = tuple((le_u16, le_u16, le_u32))(input)?;
+        let (input, (type_id, length, addr)) =
+            tuple((le_u16::<&[u8], Error<&[u8]>>, le_u16, le_u32))(input)
+                .map_err(|e| CipError::Other(e.to_string()))?;
 
         return Ok((
             input,
