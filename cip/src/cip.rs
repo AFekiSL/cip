@@ -6,6 +6,7 @@ use nom::{
 use strum_macros::Display;
 
 use crate::{
+    cip,
     common::Serializable,
     objects::{connection_manager::UnconnectedSendRequest, message_router::MessageRouter},
 };
@@ -347,6 +348,7 @@ impl Serializable for MessageRouterRequest {
     }
 }
 
+#[derive(Debug)]
 pub struct MessageRouterResponse {
     pub service: u8,
     pub reserved: u8,
@@ -617,7 +619,12 @@ impl CipClient {
             epath,
             data: alloc::vec![],
         };
-        self.send_unconnected_cm(request).await?;
+        self.cip_sequence_counter += 1;
+        let mut serialized_request = vec![self.cip_sequence_counter, 0x00];
+        for item in request.serialize()? {
+            serialized_request.push(item);
+        }
+        self.send_connected(serialized_request).await?;
         let data = self.client.read_data().await?;
 
         let result = MessageRouterResponse::deserialize(&data.data)?;
@@ -658,8 +665,10 @@ impl CipClient {
         let data = self.client.read_data().await?;
 
         let result = MessageRouterResponse::deserialize(&data.data)?;
-        tracing::debug!("final data: {:X?}", result.1.data);
-        return Ok(result.1);
+
+        tracing::debug!("MessageRouterResponse: {:?}", result.1);
+        tracing::debug!("final data: {:X?}", result.1.data); //result.1.data
+        return Ok(result.1); //
     }
 
     pub async fn send_nop(&mut self) -> CipResult<()> {

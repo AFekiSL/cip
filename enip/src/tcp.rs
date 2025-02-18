@@ -19,7 +19,10 @@ use cip::{
     },
     objects::connection_manager::{ForwardCloseRequest, ForwardOpenRequest},
 };
-use nom::number::complete::le_u32;
+use nom::{
+    error::Error,
+    number::complete::{le_u16, le_u32},
+};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, Interest},
     net::TcpStream,
@@ -223,13 +226,19 @@ impl Client for TcpEnipClient {
             SendRRData::deserialize(&result)?.0
         } else if enip.command == 0x0070 {
             tracing::debug!("SendUnitData deserialize");
-            SendUnitData::deserialize(&result)?.0
+            let data = SendUnitData::deserialize(&result)?.0;
+            let (input, cip_counter) =
+                le_u16::<&[u8], Error<&[u8]>>(data).map_err(|e| CipError::Other(e.to_string()))?;
+
+            tracing::debug!("CIP sequence counter: {:?}", cip_counter);
+            input
         } else {
             return Err(CipError::Logic(
                 "Other data need to be deserialized".to_string(),
             ));
         };
 
+        tracing::debug!("read data: {:X?}", data);
         return Ok(DataResult {
             status: enip.status,
             data: data.to_vec(),
@@ -298,7 +307,7 @@ impl Client for TcpEnipClient {
             <MessageRouterResponse as cip::common::Serializable>::deserialize(&data_result.data)?;
 
         if cip.general_status != 0 {
-            tracing::debug!("Forward open fails");
+            tracing::error!("Forward open fails");
             return Err(CipError::GeneralStatusError);
         }
 
