@@ -656,7 +656,8 @@ impl CipClient {
             epath,
             data,
         };
-        self.cip_sequence_counter += 1;
+        // cip_sequence_counter: u8
+        self.cip_sequence_counter = (self.cip_sequence_counter % 255) + 1;
         let mut serialized_request = vec![self.cip_sequence_counter, 0x00];
         for item in request.serialize()? {
             serialized_request.push(item);
